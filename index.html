@@ -9,7 +9,1966 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <style>
   * { box-sizing: border-box; }
+  body { margin:<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SYNTHESIS — AI統合提案エンジン</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
   body { margin: 0; background: #f4f0e8; }
+  input, button, textarea, select { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+
+// ── 外部ライブラリのロード ────────────────────────────────────────
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector('script[src="' + src + '"]')) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+// ── 定数 ────────────────────────────────────────────────────────
+const COLORS = ["#1a2f5a","#2d5a27","#c0392b","#8b4513","#6b2d7a","#1a5c3a","#c9920a","#404060","#7a1a40"];
+const P3 = ["#1a2f5a","#c0392b","#c9920a"];
+
+const DEMO = [
+  {
+    name:"田中 健一", role:"営業部 課長",
+    problem:"【提案書作成・見積作成】提案書と見積書を毎回ゼロから手作業で作っており、1件あたり平均4時間かかる。類似案件でも流用できる仕組みがなく営業の稼働を圧迫している。",
+    ideal:"提案書・見積書が過去事例から自動で下書きされ、1時間以内に仕上げられる状態。営業が顧客との対話に集中できる。",
+    measure:"提案書テンプレートのSFA連携・AI下書き生成・過去見積データの一元管理。"
+  },
+  {
+    name:"佐藤 美咲", role:"情報システム部 主任",
+    problem:"【全工程】リード獲得から受注・請求まで、MA・SFA・会計・在庫システムがバラバラで連携していない。工程をまたぐたびにデータを手入力で転記しており、全体の流れが見えない。",
+    ideal:"全工程のデータが単一のプラットフォームでリアルタイムに連携し、どの工程にどれだけ案件が滞留しているか一目でわかる状態。",
+    measure:"基幹システムとSFAのAPI連携・データウェアハウス整備・全工程の進捗ダッシュボード構築。"
+  },
+  {
+    name:"山田 浩二", role:"人事部 副部長",
+    problem:"【稟議・承認】稟議書の書き方が担当者によってバラバラで、差し戻しが頻発する。SFA上での承認フローの使い方が浸透しておらず、紙・メール・口頭が混在している。",
+    ideal:"全社員が標準の稟議フローをSFA上で完結させ、承認リードタイムが現在の5営業日から1営業日以内に短縮された状態。",
+    measure:"稟議テンプレート標準化・SFA承認フロー全社展開・デジタルリテラシー研修の実施。"
+  },
+  {
+    name:"鈴木 誠", role:"マーケティング部 部長",
+    problem:"【リード獲得→初回アポ】MAで獲得したリードがSFAに自動連携されず、営業への引き渡しが週次のExcel送付になっている。ホットリードへの初回アポが平均3日遅れている。",
+    ideal:"MAとSFAがリアルタイム連携し、スコアリングの高いリードには当日中に営業からアプローチできる状態。",
+    measure:"MAとSFAのシームレス接続・リードスコアリング自動連携・初回アポSLA（24時間以内）の設定。"
+  },
+  {
+    name:"渡辺 香織", role:"経営企画部 課長",
+    problem:"【受注→全体管理】受注後の進捗が各担当者の頭の中にあり、経営層がパイプライン全体を把握できない。月次会議の数字が締め後10日経たないと揃わない。",
+    ideal:"経営層がリアルタイムで全工程のパイプラインと売上予測を確認でき、翌朝には前日実績が反映されている状態。",
+    measure:"リアルタイム経営ダッシュボード整備・KPI定義の全社統一・受注から入金までの自動集計。"
+  },
+  {
+    name:"伊藤 大輔", role:"カスタマーサクセス部 リーダー",
+    problem:"【受注→CS引き継ぎ】受注情報がCSチームに正確に引き継がれず、営業が顧客に約束した内容をCSが把握していないケースが頻発している。顧客満足度の低下につながっている。",
+    ideal:"受注確定と同時にCS側に顧客情報・契約条件・期待事項が自動共有され、引き継ぎロスがゼロになった状態。",
+    measure:"SFAとCRMの受注情報自動連携・引き継ぎチェックリスト標準化・CS側のオンボーディングフロー整備。"
+  },
+  {
+    name:"小林 剛", role:"財務部 係長",
+    problem:"【見積作成→稟議・承認→受注】見積書・発注書・請求書が別々のシステムで管理されており、受注確定後の請求書発行まで手作業の転記が3回発生し、月平均3件のミスが生じている。",
+    ideal:"見積承認から請求書発行まで自動化され、転記ミスゼロ。財務担当者がデータ入力ではなく分析業務に集中できる状態。",
+    measure:"見積・受注・請求の一気通貫システム連携・承認フローの自動化・与信管理ルールのシステム組み込み。"
+  },
+  {
+    name:"加藤 里奈", role:"法務・コンプライアンス部",
+    problem:"【提案書作成・契約】提案書や契約書に含まれる顧客情報の取り扱いルールが明文化されておらず、担当者依存になっている。SFAへの入力項目に個人情報が含まれているが管理ポリシーが未整備。",
+    ideal:"全工程で取り扱う顧客データがデータガバナンスポリシーに準拠して管理され、監査対応も自動化されている状態。",
+    measure:"データガバナンスポリシー策定・SFA入力項目の個人情報整理・契約書管理ルールのシステム実装。"
+  },
+  {
+    name:"中村 俊介", role:"営業部（入社3年目）",
+    problem:"【ヒアリング→提案書作成】ヒアリング内容をメモ・Slack・メールに分散して記録しており、提案書作成時に情報を探し回る。先輩の提案書がどこにあるかわからず、毎回ゼロから作っている。",
+    ideal:"ヒアリング内容がSFAに一元記録され、類似案件の提案書がすぐに参照できる。AIが提案書の初稿を自動生成してくれる状態。",
+    measure:"ヒアリングシート標準化とSFA連携・過去提案書のナレッジベース化・AI提案書下書き生成ツールの導入。"
+  },
+];
+
+const AGENTS = [
+  { id:1, icon:"🔍", label:"Agent 1 — Insight Extractor",     color:"#1a2f5a", sys:"あなたは組織行動の専門家です。各メンバーの意見から本質的な問題意識・価値観・感情・利害関係を抽出してください。各人ごとに1〜2行で簡潔に（日本語）。", tokens:800 },
+  { id:2, icon:"⚡", label:"Agent 2 — Tension Mapper",        color:"#2d5a27", sys:"あなたは弁証法的分析の専門家です。複数視点の①対立・矛盾点、②相補・連携できる点、③止揚のための統合軸を整理してください（日本語、400字以内）。", tokens:600 },
+  { id:3, icon:"🔥", label:"Agent 3 — Strategic Synthesizer", color:"#c0392b", sys:"あなたはトップ戦略コンサルタントです。止揚した統合戦略を生成してください。①提案の核心、②戦略の3本柱、③3フェーズ実行計画、④期待効果・KPI、⑤リスクと対策。（日本語、700字以内）", tokens:1000 },
+  { id:4, icon:"📊", label:"Agent 4 — Slide Architect",       color:"#c9920a", sys:"あなたはプレゼン設計の専門家です。役員向けPowerPoint（8〜10枚）のスライド構成を設計してください。各スライドを「番号. タイトル — 要点（1行）」形式で列挙（日本語）。", tokens:600 },
+  { id:5, icon:"✅", label:"Agent 5 — Quality Reviewer",      color:"#1a5c3a", sys:"あなたは役員経験のある経営コンサルタントです。この提案の①最大の強み、②潜在リスク・懸念点、③役員を説得する最重要ポイントを評価してください（日本語、300字以内）。", tokens:500 },
+];
+
+const SVG_SYS = `あなたはデータビジュアライゼーションの専門家です。提案内容を元に図解データをJSON形式のみで出力してください。前置き・説明・マークダウン記号は一切不要です。
+出力フォーマット:
+{"strategyMap":{"center":"核心（15字以内）","pillars":[{"title":"柱1（10字以内）","items":["要素（8字以内）","要素","要素"]},{"title":"柱2（10字以内）","items":["要素","要素","要素"]},{"title":"柱3（10字以内）","items":["要素","要素","要素"]}]},"roadmap":{"phases":[{"num":"Phase 1","title":"名称（8字以内）","period":"期間","tasks":["タスク（12字以内）","タスク","タスク"]},{"num":"Phase 2","title":"名称","period":"期間","tasks":["タスク","タスク","タスク"]},{"num":"Phase 3","title":"名称","period":"期間","tasks":["タスク","タスク","タスク"]}]},"stakeholderMap":{"groups":[{"theme":"テーマ（10字以内）","members":["名前1","名前2","名前3"]},{"theme":"テーマ","members":["名前4","名前5"]},{"theme":"テーマ","members":["名前6","名前7"]}]}}`;
+
+const PROBLEM_TREE_SYS = `あなたは問題構造分析の専門家です。複数メンバーの意見を統合し、問題ツリー（根本問題→原因カテゴリ→具体的原因→本質的課題）をJSON形式のみで出力してください。前置き・説明・マークダウン記号は不要です。
+出力フォーマット:
+{"root":"根本問題（25字以内）","categories":[{"label":"原因カテゴリA（12字以内）","color":"#c0392b","causes":["具体的原因1（16字以内）","具体的原因2（16字以内）","具体的原因3（16字以内）"]},{"label":"原因カテゴリB（12字以内）","color":"#c9920a","causes":["具体的原因1（16字以内）","具体的原因2（16字以内）","具体的原因3（16字以内）"]},{"label":"原因カテゴリC（12字以内）","color":"#1a2f5a","causes":["具体的原因1（16字以内）","具体的原因2（16字以内）"]}],"issues":["本質的課題1（20字以内）","本質的課題2（20字以内）","本質的課題3（20字以内）"]}
+categoriesは3つ、causesは各2〜3つ。重複を避け横断的に統合すること。`;
+
+// ── API ─────────────────────────────────────────────────────────
+const CAUSAL_CHAIN_SYS = `あなたは戦略因果分析の専門家です。提案内容を元に、施策・効果・課題解決の因果関係をDAG（有向非巡回グラフ）として分析してください。
+重要: 1つの施策が複数の効果を生む「分岐」、複数の効果が合わさって次を可能にする「収束」を必ず含めてください。直列だけにしないこと。
+JSON形式のみで出力（前置き・説明・マークダウン記号は不要）:
+{"title":"因果連鎖タイトル（20字以内）","nodes":[{"id":"n1","type":"action","label":"施策名（15字以内）","detail":"補足（25字以内）"},{"id":"n2","type":"effect","label":"効果名（12字以内）","detail":"補足（25字以内）"}],"edges":[{"from":"n1","to":"n2"},{"from":"n1","to":"n3"}]}
+typeはaction（施策）/ effect（効果）/ resolve（課題解決）/ goal（最終目標）の4種。
+ノードは10〜14個。edgesで分岐・収束を表現（1ノードから複数へ、複数から1ノードへのedgeを必ず含む）。
+最後は必ずgoalノード1つに収束させること。`;
+
+const PROCESS_TO_BE_SYS = `あなたはビジネスプロセス改革の専門家です。現状プロセスと統合戦略・メンバーの意見を元に「目指すプロセス（To-Be）」をJSON形式のみで出力してください。前置き・説明・マークダウン記号は不要です。
+出力フォーマット:
+{"nodes":[{"id":"n1","label":"工程名（12字以内）","status":"unchanged"},{"id":"n2","label":"工程名","status":"changed","comment":"変更内容（30字以内）","reason":"変更理由（30字以内）","effect":"期待効果（25字以内）","dept":"担当部門（15字以内）"},{"id":"na1","label":"新工程名","status":"added","comment":"追加内容（30字以内）","reason":"追加理由（30字以内）","effect":"期待効果（25字以内）","dept":"担当部門（15字以内）"}],"edges":[{"from":"n1","to":"n2"}],"summary":"To-Beプロセス全体の改革ポイント（50字以内）"}
+statusは必ずunchanged/changed/addedの3種。既存ノードIDはそのまま使い追加ノードはna1,na2...とする。edgesは変更後フロー全体を定義すること。`;
+
+
+function safeParseJSON(raw) {
+  if (!raw || typeof raw !== "string") throw new Error("空のレスポンス");
+
+  // Step1: マークダウンコードブロックを除去
+  let s = raw
+    .replace(/^```json\s*/m, "").replace(/^```\s*/m, "").replace(/```\s*$/m, "")
+    .trim();
+
+  // Step2: 最初の { から対応する最後の } を抽出
+  const start = s.indexOf("{");
+  if (start === -1) throw new Error("JSONが見つかりません: " + s.slice(0, 80));
+  // 対応する } を括弧カウントで探す
+  let depth = 0, end = -1;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === "{") depth++;
+    else if (s[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+  }
+  s = end !== -1 ? s.slice(start, end + 1) : s.slice(start);
+
+  // Step3: そのままパース
+  try { return JSON.parse(s); } catch(e1) {
+    // Step4: 文字列内外すべての生の制御文字を安全に置換
+    // JSON文字列リテラルの中: \n \t に変換、外: スペースに変換
+    let cleaned = "";
+    let inStr = false, esc = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (esc) { cleaned += c; esc = false; continue; }
+      if (c === "\\" && inStr) { cleaned += c; esc = true; continue; }
+      if (c === '"') { inStr = !inStr; cleaned += c; continue; }
+      if (c === "\n") { cleaned += inStr ? "\\n" : " "; continue; }
+      if (c === "\r") { cleaned += inStr ? "\\r" : " "; continue; }
+      if (c === "\t") { cleaned += inStr ? "\\t" : " "; continue; }
+      cleaned += c;
+    }
+    try { return JSON.parse(cleaned); } catch(e2) {
+      // Step5: 末尾の不完全なJSON補完（未閉じ文字列→不完全プロパティ除去→括弧補完）
+      let fixed = cleaned.replace(/,\s*$/,"");
+      // 未閉じ文字列をステート機械で検出して閉じる
+      let inS=false,es=false;
+      for(let i=0;i<fixed.length;i++){const c=fixed[i];if(es){es=false;continue;}if(c==='\\'&&inS){es=true;continue;}if(c==='"'){inS=!inS;}}
+      if(inS) fixed+='"';
+      // 末尾の不完全プロパティ（"key": で終わっているもの）を除去
+      fixed = fixed.replace(/,?\s*"[^"]*"\s*:\s*$/,"");
+      fixed = fixed.replace(/,\s*([\]}])/g,"$1");
+      const ob=(fixed.match(/\{/g)||[]).length-(fixed.match(/\}/g)||[]).length;
+      const ab=(fixed.match(/\[/g)||[]).length-(fixed.match(/\]/g)||[]).length;
+      for(let i=0;i<ab;i++) fixed+="]";
+      for(let i=0;i<ob;i++) fixed+="}";
+      fixed=fixed.replace(/,\s*([\]}])/g,"$1");
+      try { return JSON.parse(fixed); } catch(e3) {
+        throw new Error("JSONパース失敗: " + e3.message + " / 先頭: " + s.slice(0,60));
+      }
+    }
+  }
+}
+
+async function callClaude(system, user, maxTokens) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": window.__SYNTHESIS_KEY__ || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, system: system, messages: [{ role: "user", content: user }] }),
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || "API error " + res.status); }
+  const d = await res.json();
+  return d.content.map((b) => b.text || "").join("");
+}
+
+async function callClaudeVision(system, text, images, maxTokens) {
+  const content = [];
+  images.forEach(img => {
+    const b64       = typeof img === "string" ? img : img.b64;
+    const mediaType = typeof img === "string" ? "image/jpeg" : (img.mediaType || "image/jpeg");
+    content.push({ type: "image", source: { type: "base64", media_type: mediaType, data: b64 } });
+  });
+  if (text) content.push({ type: "text", text: text });
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": window.__SYNTHESIS_KEY__ || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, system: system, messages: [{ role: "user", content: content }] }),
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || "API error " + res.status); }
+  const d = await res.json();
+  return d.content.map((b) => b.text || "").join("");
+}
+
+// ── ファイル処理ユーティリティ ────────────────────────────────────
+async function extractFromFile(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  const result = { text: "", images: [] };
+
+  if (["jpg","jpeg","png","gif","webp"].includes(ext)) {
+    const b64 = await fileToBase64(file);
+    const mediaTypeMap = { jpg:"image/jpeg", jpeg:"image/jpeg", png:"image/png", gif:"image/gif", webp:"image/webp" };
+    const mediaType = mediaTypeMap[ext] || "image/jpeg";
+    result.images.push({ name: file.name, b64: b64.split(",")[1], url: b64, mediaType });
+    return result;
+  }
+
+  if (ext === "pdf") {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+    const pdfjsLib = window["pdfjs-dist/build/pdf"];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const ab = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    const texts = [];
+    // テキスト抽出：全ページ（最大20ページ）
+    for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      texts.push(tc.items.map(it => it.str).join(" "));
+    }
+    result.text = texts.join("\n\n");
+    // 画像化：最初の3ページのみ（メモリ節約）
+    for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+      const page = await pdf.getPage(i);
+      const vp = page.getViewport({ scale: 1.0 });
+      const canvas = document.createElement("canvas");
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+      result.images.push({ name: "PDF_p" + i + ".jpg", b64: dataUrl.split(",")[1], url: dataUrl });
+      // canvasを明示的に解放
+      canvas.width = 0; canvas.height = 0;
+    }
+    return result;
+  }
+
+  if (["xlsx","xls","csv"].includes(ext)) {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+    const XLSX = window.XLSX;
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type: "array" });
+    const rows = [];
+    wb.SheetNames.forEach(name => {
+      const ws = wb.Sheets[name];
+      const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false });
+      rows.push("【シート: " + name + "】\n" + csv);
+    });
+    result.text = rows.join("\n\n");
+    return result;
+  }
+
+  if (ext === "pptx") {
+    // PPTXはZIPなのでテキストのみ抽出
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+    const JSZip = window.JSZip;
+    const ab = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(ab);
+    const texts = [];
+    const slideFiles = Object.keys(zip.files).filter(n => n.match(/ppt\/slides\/slide\d+\.xml$/)).sort();
+    for (const sf of slideFiles.slice(0, 15)) {
+      const xml = await zip.files[sf].async("string");
+      const stripped = xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (stripped.length > 10) texts.push(stripped);
+    }
+    result.text = texts.join("\n\n");
+    return result;
+  }
+
+  if (["txt","md"].includes(ext)) {
+    result.text = await file.text();
+    return result;
+  }
+
+  throw new Error("未対応のファイル形式: " + ext);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+async function analyzeFileWithClaude(text, images) {
+  const sys = `あなたは資料分析の専門家です。添付された資料（テキスト・画像）を分析し、業務課題・改革ニーズ・理想状態に関連する重要情報を日本語で抽出してください。
+以下の形式でJSON出力してください（説明文・マークダウン不要）:
+{"problem":"この資料から読み取れる現状の問題・課題（150字以内）","ideal":"この資料から読み取れるあるべき姿・理想状態（150字以内）","measure":"この資料から読み取れる主要方策・具体的施策（150字以内）","summary":"資料の概要（100字以内）"}`;
+
+  const userText = text ? "資料のテキスト内容:\n" + text.slice(0, 3000) : "添付画像を分析してください。";
+  
+  if (images.length > 0) {
+    const raw = await callClaudeVision(sys, userText, images.slice(0, 3), 800);
+    return safeParseJSON(raw);
+  } else {
+    const raw = await callClaude(sys, userText, 800);
+    return safeParseJSON(raw);
+  }
+}
+
+// ── SVG図解コンポーネント ────────────────────────────────────────
+function StrategyMapSVG({ data, quotedImages }) {
+  if (!data) return null;
+  const W = 800, H = quotedImages && quotedImages.length > 0 ? 620 : 500;
+  const cx = 400, cy = 230, cr = 72;
+  const pAngles = [-90, 30, 150];
+  const pR = 185;
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", background: "white", borderRadius: 4 }}>
+      <defs>
+        <radialGradient id="cg" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#1a2f5a" />
+          <stop offset="100%" stopColor="#0d1f3c" />
+        </radialGradient>
+      </defs>
+      {data.pillars.map((_, i) => {
+        const a = (pAngles[i] * Math.PI) / 180;
+        return <line key={i} x1={cx} y1={cy} x2={cx + pR * Math.cos(a)} y2={cy + pR * Math.sin(a)} stroke="#e0dbd0" strokeWidth="2" />;
+      })}
+      <circle cx={cx} cy={cy} r={cr} fill="url(#cg)" />
+      <text x={cx} y={cy - 8} textAnchor="middle" fill="white" fontSize="11" fontWeight="bold" fontFamily="sans-serif">提案の核心</text>
+      <text x={cx} y={cy + 8} textAnchor="middle" fill="#c9920a" fontSize="10" fontFamily="sans-serif">{data.center}</text>
+      {data.pillars.map((p, i) => {
+        const a = (pAngles[i] * Math.PI) / 180;
+        const px = cx + pR * Math.cos(a), py = cy + pR * Math.sin(a);
+        const color = P3[i];
+        const iAngles = [-30, 0, 30].map(o => a + (o * Math.PI) / 180);
+        return (
+          <g key={i}>
+            <circle cx={px} cy={py} r={46} fill={color} opacity="0.9" />
+            <text x={px} y={py} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{p.title}</text>
+            {p.items.map((item, j) => {
+              const ia = iAngles[j], ix = px + 128 * Math.cos(ia), iy = py + 128 * Math.sin(ia);
+              return (
+                <g key={j}>
+                  <line x1={px + 46 * Math.cos(ia)} y1={py + 46 * Math.sin(ia)} x2={ix - 28 * Math.cos(ia)} y2={iy - 28 * Math.sin(ia)} stroke={color} strokeWidth="1.5" strokeDasharray="4,3" opacity="0.5" />
+                  <rect x={ix - 42} y={iy - 12} width="84" height="24" rx="12" fill={color} opacity="0.12" stroke={color} strokeWidth="1" />
+                  <text x={ix} y={iy} textAnchor="middle" dominantBaseline="middle" fill={color} fontSize="9" fontWeight="bold" fontFamily="sans-serif">{item}</text>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+      {quotedImages && quotedImages.length > 0 && (
+        <g>
+          <text x={20} y={H - 100 + 12} fill="#888" fontSize="8" fontFamily="monospace">REFERENCED IMAGES</text>
+          {quotedImages.slice(0, 4).map((img, i) => (
+            <image key={i} href={img.url} x={20 + i * 120} y={H - 85} width="110" height="70" preserveAspectRatio="xMidYMid slice"
+              style={{ clipPath: "inset(0 round 4px)" }} />
+          ))}
+        </g>
+      )}
+      <text x={W / 2} y={H - 6} textAnchor="middle" fill="#bbb" fontSize="8" fontFamily="monospace">STRATEGY MAP</text>
+    </svg>
+  );
+}
+
+function RoadmapSVG({ data }) {
+  if (!data) return null;
+  const W = 800, H = 320;
+  const phaseW = 220, gap = 40, startX = 60, topY = 60;
+  const phaseColors = ["#1a2f5a","#c0392b","#c9920a"];
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", background: "white", borderRadius: 4 }}>
+      {[0,1].map(i => {
+        const x = startX + (i + 1) * phaseW + i * gap - 2;
+        return (
+          <g key={i}>
+            <line x1={x} y1={topY + 30} x2={x + gap + 4} y2={topY + 30} stroke="#ddd" strokeWidth="2" />
+            <polygon points={(x+gap+4)+","+(topY+30)+" "+(x+gap-2)+","+(topY+25)+" "+(x+gap-2)+","+(topY+35)} fill="#ddd" />
+          </g>
+        );
+      })}
+      {data.phases.map((ph, i) => {
+        const x = startX + i * (phaseW + gap), color = phaseColors[i];
+        return (
+          <g key={i}>
+            <rect x={x} y={topY} width={phaseW} height={40} rx="4" fill={color} />
+            <text x={x+12} y={topY+14} fill="rgba(255,255,255,0.6)" fontSize="9" fontFamily="monospace" fontWeight="bold">{ph.num}</text>
+            <text x={x+12} y={topY+29} fill="white" fontSize="12" fontFamily="sans-serif" fontWeight="bold">{ph.title}</text>
+            <text x={x+phaseW-8} y={topY+14} textAnchor="end" fill="rgba(255,255,255,0.7)" fontSize="9" fontFamily="monospace">{ph.period}</text>
+            {ph.tasks.map((task, j) => {
+              const ty = topY + 60 + j * 48;
+              return (
+                <g key={j}>
+                  <rect x={x+8} y={ty} width={phaseW-16} height={36} rx="4" fill={color} opacity="0.08" stroke={color} strokeWidth="1.5" />
+                  <circle cx={x+22} cy={ty+18} r={7} fill={color} opacity="0.7" />
+                  <text x={x+22} y={ty+18} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="bold">{j+1}</text>
+                  <text x={x+36} y={ty+18} dominantBaseline="middle" fill="#1f2937" fontSize="10" fontFamily="sans-serif">{task}</text>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+      <text x={W/2} y={H-8} textAnchor="middle" fill="#bbb" fontSize="8" fontFamily="monospace">ROADMAP</text>
+    </svg>
+  );
+}
+
+function StakeholderSVG({ data, members }) {
+  if (!data) return null;
+  const W = 800, H = 340;
+  const groupColors = ["#1a2f5a","#c0392b","#2d5a27"];
+  const positions = [{ x:160, y:120 }, { x:400, y:80 }, { x:640, y:120 }];
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", background: "white", borderRadius: 4 }}>
+      <rect x={300} y={220} width={200} height={44} rx={22} fill="#f4f0e8" stroke="#e5e0d8" strokeWidth="2" />
+      <text x={400} y={246} textAnchor="middle" dominantBaseline="middle" fill="#1a2f5a" fontSize="11" fontWeight="bold" fontFamily="sans-serif">統合提案チーム</text>
+      {positions.map((pos, i) => (
+        <line key={i} x1={pos.x} y1={pos.y+60} x2={400} y2={224} stroke={groupColors[i]} strokeWidth="1.5" strokeDasharray="5,4" opacity="0.3" />
+      ))}
+      {data.groups.map((g, i) => {
+        const pos = positions[i] || { x: 160+i*240, y:120 }, color = groupColors[i % groupColors.length];
+        const bH = 32 + g.members.length * 22;
+        return (
+          <g key={i}>
+            <rect x={pos.x-90} y={pos.y-20} width={180} height={bH} rx="6" fill={color} opacity="0.07" stroke={color} strokeWidth="1.5" />
+            <rect x={pos.x-90} y={pos.y-20} width={180} height={26} rx="6" fill={color} opacity="0.85" />
+            <rect x={pos.x-90} y={pos.y-4} width={180} height={10} fill={color} opacity="0.85" />
+            <text x={pos.x} y={pos.y-4} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{g.theme}</text>
+            {g.members.map((name, j) => {
+              const mc = members ? COLORS[members.findIndex(m => m.name.includes(name.split(" ")[0])) % COLORS.length] : color;
+              return (
+                <g key={j}>
+                  <circle cx={pos.x-62} cy={pos.y+18+j*22} r={7} fill={mc || color} />
+                  <text x={pos.x-52} y={pos.y+18+j*22} dominantBaseline="middle" fill="#1f2937" fontSize="10" fontFamily="sans-serif">{name}</text>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+      <text x={W/2} y={H-8} textAnchor="middle" fill="#bbb" fontSize="8" fontFamily="monospace">STAKEHOLDER MAP</text>
+    </svg>
+  );
+}
+
+function CausalChainSVG({ data }) {
+  if (!data || !data.nodes || !data.edges) return null;
+  const nodes = data.nodes;
+  const edges = data.edges;
+
+  // トポロジカル層計算 (Kahn's BFS)
+  const children = {}, inDeg = {};
+  nodes.forEach(n => { children[n.id] = []; inDeg[n.id] = 0; });
+  edges.forEach(e => {
+    if (children[e.from]) children[e.from].push(e.to);
+    inDeg[e.to] = (inDeg[e.to] || 0) + 1;
+  });
+  const layer = {};
+  const queue = nodes.filter(n => !inDeg[n.id]).map(n => n.id);
+  queue.forEach(id => { layer[id] = 0; });
+  const bfsQ = [...queue];
+  while (bfsQ.length) {
+    const cur = bfsQ.shift();
+    (children[cur] || []).forEach(child => {
+      layer[child] = Math.max(layer[child] || 0, (layer[cur] || 0) + 1);
+      inDeg[child]--;
+      if (inDeg[child] === 0) bfsQ.push(child);
+    });
+  }
+
+  // レイヤーごとにノードをグループ化
+  const maxLayer = Math.max(...Object.values(layer), 0);
+  const byLayer = {};
+  for (let l = 0; l <= maxLayer; l++) byLayer[l] = [];
+  nodes.forEach(n => byLayer[layer[n.id] || 0].push(n));
+
+  // サイズ定数
+  const NW = 156, NH = 64, gapX = 52, gapY = 18;
+  const colW = NW + gapX;
+  const W = Math.max(860, (maxLayer + 1) * colW + 80);
+  const maxPerLayer = Math.max(...Object.values(byLayer).map(a => a.length), 1);
+  const H = 56 + maxPerLayer * (NH + gapY) + 28;
+
+  // ノード座標
+  const pos = {};
+  for (let l = 0; l <= maxLayer; l++) {
+    const ln = byLayer[l];
+    const totalH = ln.length * NH + (ln.length - 1) * gapY;
+    const startY = (H - 56 - totalH) / 2 + 56;
+    ln.forEach((n, i) => {
+      pos[n.id] = { x: 40 + l * colW, y: startY + i * (NH + gapY) };
+    });
+  }
+
+  const typeStyle = {
+    action:  { bg: "#1a2f5a", badge: "施策", accent: "#c9920a" },
+    effect:  { bg: "#1a5c3a", badge: "効果", accent: "#27ae60" },
+    resolve: { bg: "#7a3520", badge: "解決", accent: "#c0392b" },
+    goal:    { bg: "#4a1a6a", badge: "目標", accent: "#8e44ad" },
+  };
+
+  // エッジパス (ベジェ)
+  const paths = edges.map(e => {
+    const f = pos[e.from], t = pos[e.to];
+    if (!f || !t) return null;
+    const fx = f.x + NW, fy = f.y + NH / 2;
+    const tx = t.x,      ty = t.y + NH / 2;
+    const mx = (fx + tx) / 2;
+    return { key: e.from + e.to, d: `M ${fx} ${fy} C ${mx} ${fy} ${mx} ${ty} ${tx} ${ty}` };
+  }).filter(Boolean);
+
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", background: "#f8f7f4", borderRadius: 4 }}>
+      <defs>
+        <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+          <polygon points="0 0,7 2.5,0 5" fill="#aaa"/>
+        </marker>
+      </defs>
+
+      {/* タイトル */}
+      <text x={W/2} y={18} textAnchor="middle" fill="#1a2f5a" fontSize="13" fontWeight="900" fontFamily="sans-serif">{data.title}</text>
+      <text x={W/2} y={32} textAnchor="middle" fill="#bbb" fontSize="8" fontFamily="monospace" letterSpacing="2">CAUSAL DAG — 因果構造グラフ</text>
+
+      {/* レイヤーラベル */}
+      {Array.from({ length: maxLayer + 1 }, (_, l) => {
+        const labels = ["起　点", "第1波及", "第2波及", "第3波及", "到　達"];
+        return (
+          <text key={l} x={40 + l * colW + NW / 2} y={48}
+            textAnchor="middle" fill="#ccc" fontSize="8" fontFamily="monospace">
+            {labels[l] || ("L" + l)}
+          </text>
+        );
+      })}
+
+      {/* エッジ */}
+      {paths.map(p => (
+        <path key={p.key} d={p.d} fill="none" stroke="#c8c0b4" strokeWidth="1.5" markerEnd="url(#arr)"/>
+      ))}
+
+      {/* ノード */}
+      {nodes.map(n => {
+        const p = pos[n.id];
+        if (!p) return null;
+        const st = typeStyle[n.type] || typeStyle.effect;
+        const lines = [];
+        const lbl = n.label || "";
+        for (let i = 0; i < lbl.length; i += 10) lines.push(lbl.slice(i, i + 10));
+        return (
+          <g key={n.id}>
+            <rect x={p.x} y={p.y} width={NW} height={NH} rx="7"
+              fill={st.bg} stroke={st.accent} strokeWidth="1.5"/>
+            {/* バッジ */}
+            <rect x={p.x + 5} y={p.y - 9} width={30} height={17} rx="8" fill={st.accent}/>
+            <text x={p.x + 20} y={p.y + 0} textAnchor="middle" dominantBaseline="middle"
+              fill="white" fontSize="8" fontWeight="bold" fontFamily="monospace">{st.badge}</text>
+            {/* ラベル */}
+            {lines.map((ln, li) => (
+              <text key={li} x={p.x + NW / 2} y={p.y + 20 + li * 14} textAnchor="middle"
+                fill="white" fontSize="11" fontWeight="bold" fontFamily="sans-serif">{ln}</text>
+            ))}
+            {/* detail */}
+            {n.detail && (
+              <text x={p.x + NW / 2} y={p.y + NH - 9} textAnchor="middle"
+                fill="rgba(255,255,255,0.55)" fontSize="8" fontFamily="sans-serif">
+                {n.detail.length > 17 ? n.detail.slice(0, 17) + "…" : n.detail}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function ProblemTreeSVG({ data }) {
+  if (!data) return null;
+  const W = 920, catCount = (data.categories || []).length;
+  // 各カテゴリの原因数から高さを動的計算
+  const maxCauses = Math.max(...(data.categories||[]).map(c=>(c.causes||[]).length), 2);
+  const causeH = 36, causeGap = 8, catPad = 24;
+  const catH = catPad + maxCauses * (causeH + causeGap);
+  const H = 120 + catH + 80 + 60; // root + cats + issues + footer
+
+  const rootY = 48, rootH = 52, rootCX = W/2;
+  const catY  = rootY + rootH + 60;
+  const catW  = 240;
+  const totalCatW = catCount * catW + (catCount-1) * 24;
+  const catStartX = (W - totalCatW) / 2;
+  const issueY = catY + catH + 56;
+  const issueW = 220, issueH = 44;
+
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width:"100%", background:"#fafaf8", borderRadius:4 }}>
+      <defs>
+        <radialGradient id="rootGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#1a2f5a"/>
+          <stop offset="100%" stopColor="#0d1f3c"/>
+        </radialGradient>
+        <filter id="shadow">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12"/>
+        </filter>
+      </defs>
+
+      {/* タイトル */}
+      <text x={W/2} y={18} textAnchor="middle" fill="#1a2f5a" fontSize="13" fontWeight="900" fontFamily="sans-serif">問題・課題ツリー図</text>
+
+      {/* ── 根本問題ノード ── */}
+      <rect x={rootCX-160} y={rootY} width={320} height={rootH} rx="8" fill="url(#rootGrad)" filter="url(#shadow)"/>
+      <text x={rootCX} y={rootY+14} textAnchor="middle" fill="rgba(255,255,255,0.55)" fontSize="9" fontFamily="monospace" letterSpacing="3">ROOT PROBLEM</text>
+      <text x={rootCX} y={rootY+34} textAnchor="middle" fill="white" fontSize="13" fontWeight="bold" fontFamily="sans-serif">{data.root}</text>
+
+      {/* 根本問題→各カテゴリへの線 */}
+      {(data.categories||[]).map((cat, ci) => {
+        const cx = catStartX + ci * (catW + 24) + catW/2;
+        return (
+          <g key={ci}>
+            <line x1={rootCX} y1={rootY+rootH} x2={cx} y2={catY} stroke="#c0c8d8" strokeWidth="1.5" strokeDasharray="5,3"/>
+            <circle cx={cx} cy={catY} r="4" fill={cat.color || "#1a2f5a"}/>
+          </g>
+        );
+      })}
+
+      {/* ── カテゴリ＋原因ノード ── */}
+      {(data.categories||[]).map((cat, ci) => {
+        const cx = catStartX + ci * (catW + 24);
+        const color = cat.color || "#1a2f5a";
+        return (
+          <g key={ci}>
+            {/* カテゴリヘッダー */}
+            <rect x={cx} y={catY} width={catW} height={36} rx="6" fill={color}/>
+            <text x={cx+catW/2} y={catY+18} textAnchor="middle" dominantBaseline="middle"
+              fill="white" fontSize="11" fontWeight="bold" fontFamily="sans-serif">{cat.label}</text>
+            {/* 原因ノード */}
+            {(cat.causes||[]).map((cause, ki) => {
+              const ky = catY + 36 + catPad/2 + ki*(causeH+causeGap);
+              return (
+                <g key={ki}>
+                  {/* カテゴリ→原因の縦線 */}
+                  <line x1={cx+catW/2} y1={catY+36+(ki===0?catPad/2-causeH/2:0)} x2={cx+catW/2} y2={ky}
+                    stroke={color} strokeWidth="1" strokeDasharray="3,2" strokeOpacity="0.4"/>
+                  <rect x={cx+8} y={ky} width={catW-16} height={causeH} rx="5"
+                    fill={color} fillOpacity="0.08" stroke={color} strokeWidth="1.2" strokeOpacity="0.35"/>
+                  <rect x={cx+8} y={ky} width="3" height={causeH} rx="2" fill={color} fillOpacity="0.5"/>
+                  {cause.length > 13 ? (
+                    <g>
+                      <text x={cx+18} y={ky+12} fill="#1f2937" fontSize="9" fontFamily="sans-serif">{cause.slice(0,13)}</text>
+                      <text x={cx+18} y={ky+24} fill="#1f2937" fontSize="9" fontFamily="sans-serif">{cause.slice(13)}</text>
+                    </g>
+                  ) : (
+                    <text x={cx+18} y={ky+causeH/2} dominantBaseline="middle" fill="#1f2937" fontSize="9" fontFamily="sans-serif">{cause}</text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+
+      {/* カテゴリ→本質的課題への収束線 */}
+      {(data.categories||[]).map((cat, ci) => {
+        const cx = catStartX + ci*(catW+24) + catW/2;
+        const issueCount = (data.issues||[]).length;
+        const issueTotalW = issueCount*issueW + (issueCount-1)*20;
+        const issueStartX = (W - issueTotalW)/2;
+        // 最も近い課題ノードへ
+        const targetX = issueStartX + Math.floor(ci * issueCount / (data.categories||[]).length) * (issueW+20) + issueW/2;
+        return (
+          <line key={ci} x1={cx} y1={catY+catH} x2={targetX} y2={issueY}
+            stroke="#aaa" strokeWidth="1.5" strokeDasharray="4,3"/>
+        );
+      })}
+
+      {/* ── 本質的課題ノード ── */}
+      {(data.issues||[]).map((issue, ii) => {
+        const issueCount = data.issues.length;
+        const issueTotalW = issueCount*issueW + (issueCount-1)*20;
+        const issueStartX = (W - issueTotalW)/2;
+        const ix = issueStartX + ii*(issueW+20);
+        return (
+          <g key={ii}>
+            <rect x={ix} y={issueY} width={issueW} height={issueH} rx="6"
+              fill="#c0392b" fillOpacity="0.08" stroke="#c0392b" strokeWidth="1.8"/>
+            <text x={ix+issueW/2} y={issueY+10} textAnchor="middle" fill="#c0392b" fontSize="8" fontFamily="monospace" fontWeight="bold">本質的課題 {ii+1}</text>
+            {issue.length > 14 ? (
+              <g>
+                <text x={ix+issueW/2} y={issueY+24} textAnchor="middle" fill="#1f2937" fontSize="10" fontFamily="sans-serif">{issue.slice(0,14)}</text>
+                <text x={ix+issueW/2} y={issueY+36} textAnchor="middle" fill="#1f2937" fontSize="10" fontFamily="sans-serif">{issue.slice(14)}</text>
+              </g>
+            ) : (
+              <text x={ix+issueW/2} y={issueY+issueH/2+4} textAnchor="middle" dominantBaseline="middle" fill="#1f2937" fontSize="10" fontFamily="sans-serif">{issue}</text>
+            )}
+          </g>
+        );
+      })}
+
+      <text x={W/2} y={H-8} textAnchor="middle" fill="#bbb" fontSize="8" fontFamily="monospace">PROBLEM TREE</text>
+    </svg>
+  );
+}
+
+// ── ドロップゾーンコンポーネント ─────────────────────────────────
+function DropZone({ memberId, onAnalyzed, allImages }) {
+  const [dragging, setDragging] = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [files, setFiles]       = useState([]);
+  const [status, setStatus]     = useState("");
+  const inputRef = useRef(null);
+
+  const processFile = async (file) => {
+    setLoading(true);
+    setStatus("📂 " + file.name + " を解析中...");
+    try {
+      const extracted = await extractFromFile(file);
+      setStatus("🤖 Claudeが内容を言語化中...");
+      const analysis = await analyzeFileWithClaude(extracted.text, extracted.images);
+      setFiles(prev => [...prev, { name: file.name, analysis, images: extracted.images }]);
+      allImages.current = [...(allImages.current || []), ...extracted.images];
+      onAnalyzed(analysis);
+      setStatus("✓ 解析完了: " + file.name);
+    } catch (e) {
+      setStatus("⚠ エラー: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault(); setDragging(false);
+    Array.from(e.dataTransfer.files).forEach(processFile);
+  };
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.25em", color: "#bbb", marginBottom: 4 }}>
+        📎 資料をドロップ（PDF / Excel / PPTX / 画像）
+      </div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onClick={() => inputRef.current.click()}
+        style={{
+          border: "2px dashed " + (dragging ? "#c9920a" : "#d0c8b8"),
+          borderRadius: 4, padding: "10px 12px", cursor: "pointer", transition: "all 0.2s",
+          background: dragging ? "rgba(201,146,10,0.06)" : "rgba(0,0,0,0.02)",
+          textAlign: "center", fontSize: 11, color: "#aaa",
+        }}
+      >
+        {loading ? status : (files.length === 0 ? "ここにファイルをドロップ、またはクリックして選択" : "＋ 追加する")}
+        <input ref={inputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,.pptx,.jpg,.jpeg,.png,.webp,.txt"
+          style={{ display: "none" }} onChange={(e) => Array.from(e.target.files).forEach(processFile)} />
+      </div>
+      {status && !loading && (
+        <div style={{ fontSize: 10, color: status.startsWith("⚠") ? "#c0392b" : "#1a5c3a", marginTop: 4, fontFamily: "monospace" }}>{status}</div>
+      )}
+      {files.map((f, i) => (
+        <div key={i} style={{ marginTop: 6, background: "#f0fff4", border: "1px solid #c3e6cb", borderRadius: 3, padding: "6px 10px" }}>
+          <div style={{ fontFamily: "monospace", fontSize: 9, color: "#1a5c3a", fontWeight: 700, marginBottom: 2 }}>✓ {f.name}</div>
+          <div style={{ fontSize: 10, color: "#555", lineHeight: 1.5 }}>{f.analysis.summary}</div>
+          {f.images.length > 0 && (
+            <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+              {f.images.slice(0, 4).map((img, j) => (
+                <img key={j} src={img.url} alt="" style={{ width: 48, height: 32, objectFit: "cover", borderRadius: 2, border: "1px solid #ddd" }} />
+              ))}
+              {f.images.length > 4 && <span style={{ fontSize: 9, color: "#888", alignSelf: "center" }}>+{f.images.length-4}枚</span>}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── MemberCard ───────────────────────────────────────────────────
+function MemberCard({ m, idx, onUpdate, onRemove, allImages }) {
+  const color = COLORS[idx % COLORS.length];
+  return (
+    <div style={{ background: "white", border: "2px solid #e5e0d8", borderRadius: 4, padding: 16, position: "relative" }}>
+      <button onClick={onRemove} style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none", color: "#ccc", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+          {m.name ? m.name[0] : "?"}
+        </div>
+        <div style={{ flex: 1 }}>
+          <input value={m.name} onChange={(e) => onUpdate("name", e.target.value)} placeholder="名前"
+            style={{ width: "100%", fontWeight: 700, fontSize: 14, border: "none", borderBottom: "2px solid #e5e0d8", background: "transparent", outline: "none", padding: "2px 0", fontFamily: "inherit", boxSizing: "border-box" }} />
+          <input value={m.role} onChange={(e) => onUpdate("role", e.target.value)} placeholder="部署・役割"
+            style={{ width: "100%", fontSize: 11, border: "none", borderBottom: "1px dashed #e5e0d8", background: "transparent", outline: "none", padding: "2px 0", color: "#888", fontFamily: "monospace", marginTop: 3, boxSizing: "border-box" }} />
+        </div>
+      </div>
+      {[{ key:"problem", label:"🔴 現状の問題・課題" }, { key:"ideal", label:"🟢 あるべき姿・理想" }, { key:"measure", label:"🟡 主要方策" }].map((f) => (
+        <div key={f.key} style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.25em", color: "#bbb", marginBottom: 3 }}>{f.label}</div>
+          <textarea value={m[f.key]} onChange={(e) => onUpdate(f.key, e.target.value)} rows={2}
+            style={{ width: "100%", fontSize: 12, border: "1px solid #e5e0d8", background: "#faf8f4", outline: "none", padding: "6px 8px", resize: "vertical", lineHeight: 1.65, borderRadius: 2, fontFamily: "inherit", boxSizing: "border-box" }} />
+        </div>
+      ))}
+      <DropZone
+        memberId={m.id}
+        allImages={allImages}
+        onAnalyzed={(analysis) => {
+          if (analysis.problem && !m.problem) onUpdate("problem", analysis.problem);
+          if (analysis.ideal   && !m.ideal)   onUpdate("ideal",   analysis.ideal);
+        }}
+      />
+    </div>
+  );
+}
+
+// ── AgentRow ─────────────────────────────────────────────────────
+function AgentRow({ ag, status, text }) {
+  const active = status === "active", done = status === "done";
+  return (
+    <div style={{ display: "flex", gap: 16, padding: "12px 0", opacity: (!active && !done) ? 0.22 : 1, borderBottom: "1px solid #f0ece4" }}>
+      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "white", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, border: "3px solid " + (done ? "#1a5c3a" : active ? ag.color : "#ddd") }}>{ag.icon}</div>
+      <div style={{ flex: 1, paddingTop: 2 }}>
+        <div style={{ fontFamily: "monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: ag.color, marginBottom: 3 }}>
+          {ag.label}{active ? " — 分析中..." : done ? " — 完了 ✓" : ""}
+        </div>
+        {done && <div style={{ fontSize: 12, lineHeight: 1.8, whiteSpace: "pre-wrap", color: "#2d3748", borderLeft: "3px solid " + ag.color, paddingLeft: 10, marginTop: 4 }}>{text}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── TopBar ───────────────────────────────────────────────────────
+// ── デフォルトの営業プロセスデータ ─────────────────────────────
+// ── デフォルトノードデータ ─────────────────────────────────────
+const DEFAULT_NODES = [
+  { id:"n1", label:"リード獲得",     x: 40,  y: 40  },
+  { id:"n2", label:"初回アポ",       x: 200, y: 40  },
+  { id:"n3", label:"ヒアリング",     x: 360, y: 40  },
+  { id:"n4", label:"提案書作成",     x: 520, y: 10  },
+  { id:"n5", label:"見積作成",       x: 520, y: 90  },
+  { id:"n6", label:"提案・プレゼン", x: 680, y: 40  },
+  { id:"n7", label:"稟議・承認",     x: 840, y: 40  },
+  { id:"n8", label:"受注",           x:1000, y: 40  },
+];
+const DEFAULT_EDGES = [
+  { id:"e1", from:"n1", to:"n2" },
+  { id:"e2", from:"n2", to:"n3" },
+  { id:"e3", from:"n3", to:"n4" },
+  { id:"e3b",from:"n3", to:"n5" },
+  { id:"e4", from:"n4", to:"n6" },
+  { id:"e5", from:"n5", to:"n6" },
+  { id:"e6", from:"n6", to:"n7" },
+  { id:"e7", from:"n7", to:"n8" },
+];
+
+// ── フローエディタ本体 ───────────────────────────────────────────
+function ProcessFlowSVG({ nodes, edges, mode }) {
+  if (!nodes || nodes.length === 0) return null;
+  const NW = 130, NH = 36, GAP_X = 34, GAP_Y = 62;
+
+  // トポロジカル層計算
+  const ch={}, ind={};
+  nodes.forEach(n=>{ ch[n.id]=[]; ind[n.id]=0; });
+  (edges||[]).forEach(e=>{ if(ch[e.from]) ch[e.from].push(e.to); ind[e.to]=(ind[e.to]||0)+1; });
+  const lay={};
+  nodes.filter(n=>!ind[n.id]).forEach(n=>{ lay[n.id]=0; });
+  const q=[...nodes.filter(n=>!ind[n.id]).map(n=>n.id)];
+  while(q.length){ const c=q.shift(); (ch[c]||[]).forEach(x=>{ lay[x]=Math.max(lay[x]||0,(lay[c]||0)+1); ind[x]--; if(!ind[x])q.push(x); }); }
+  const maxL=Math.max(...Object.values(lay),0);
+  const byL={};
+  for(let l=0;l<=maxL;l++) byL[l]=[];
+  nodes.forEach(n=>byL[lay[n.id]||0].push(n));
+  const maxP=Math.max(...Object.values(byL).map(a=>a.length),1);
+
+  // ノード座標
+  const NW_TOTAL=(maxL+1)*(NW+GAP_X)+40;
+  const W=Math.max(560, NW_TOTAL);
+  // tobe: 変更ノードの引き出し吹き出しエリアを下に確保
+  const cNodes=mode==="tobe"?nodes.filter(n=>n.status!=="unchanged"):[];
+  const BALLOON_H=58, BALLOON_W=162, BALLOON_GAP=8;
+  const nodeRows=maxP;
+  const nodeAreaH=16+nodeRows*(NH+GAP_Y);
+  const H=nodeAreaH+(cNodes.length>0?BALLOON_H+40:8);
+
+  const pos={};
+  for(let l=0;l<=maxL;l++){
+    const ln=byL[l]; const tH=ln.length*NH+(ln.length-1)*GAP_Y;
+    const sy=12+(nodeAreaH-12-tH)/2;
+    ln.forEach((n,i)=>{ pos[n.id]={x:20+l*(NW+GAP_X), y:sy+i*(NH+GAP_Y)}; });
+  }
+
+  // 吹き出し座標: 画面幅を均等分割
+  const bBaseY=nodeAreaH+16;
+  const totalBW=cNodes.length*(BALLOON_W)+(cNodes.length-1)*BALLOON_GAP;
+  const bStartX=Math.max(20,(W-totalBW)/2);
+  const bPos=cNodes.map((_,i)=>({ x:bStartX+i*(BALLOON_W+BALLOON_GAP), y:bBaseY }));
+
+  const SS={
+    unchanged:{ fill:"#1a2f5a", stroke:"#4a70a8", op:0.10, tf:"#1a2f5a" },
+    changed:  { fill:"#c9920a", stroke:"#c9920a", op:0.16, tf:"#7a5200" },
+    added:    { fill:"#1a5c3a", stroke:"#1a5c3a", op:0.16, tf:"#0d4028" },
+  };
+  const ep=e=>{ const f=pos[e.from],t=pos[e.to]; if(!f||!t) return null;
+    const fx=f.x+NW,fy=f.y+NH/2,tx=t.x,ty=t.y+NH/2;
+    if(Math.abs(fy-ty)<3) return `M ${fx} ${fy} L ${tx} ${ty}`;
+    const mx=(fx+tx)/2; return `M ${fx} ${fy} C ${mx} ${fy} ${mx} ${ty} ${tx} ${ty}`; };
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",background:"#fafaf8",borderRadius:4,border:"1px solid #e8e4dc"}}>
+      <defs>
+        <marker id={"pm"+mode} markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+          <polygon points="0 0,7 2.5,0 5" fill="#ccc"/>
+        </marker>
+      </defs>
+
+      {/* エッジ */}
+      {(edges||[]).map((e,i)=>{ const d=ep(e); if(!d) return null;
+        return <path key={i} d={d} fill="none" stroke="#ccc" strokeWidth="1.5" markerEnd={"url(#pm"+mode+")"}/>; })}
+
+      {/* ノード */}
+      {nodes.map(n=>{ const p=pos[n.id]; if(!p) return null;
+        const st=SS[n.status||"unchanged"];
+        return (
+          <g key={n.id}>
+            <rect x={p.x} y={p.y} width={NW} height={NH} rx="6"
+              fill={st.fill} fillOpacity={st.op} stroke={st.stroke}
+              strokeWidth={n.status!=="unchanged"?2:1.5}
+              strokeDasharray={n.status==="added"?"6,3":"none"}/>
+            {n.status!=="unchanged" && (
+              <text x={p.x+5} y={p.y+8} fill={st.stroke} fontSize="7" fontFamily="monospace" fontWeight="bold">
+                {n.status==="added"?"NEW":"改"}
+              </text>
+            )}
+            <text x={p.x+NW/2} y={p.y+NH/2} textAnchor="middle" dominantBaseline="middle"
+              fill={st.tf} fontSize="10" fontWeight="bold" fontFamily="sans-serif">
+              {(n.label||"").length>12?n.label.slice(0,11)+"…":n.label}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* 引き出し線 + 吹き出しコメント */}
+      {cNodes.map((n,ci)=>{
+        const p=pos[n.id]; if(!p) return null;
+        const st=SS[n.status||"unchanged"];
+        const bp=bPos[ci];
+        // 引き出し元: ノード下辺中央
+        const lx0=p.x+NW/2, ly0=p.y+NH;
+        // 吹き出し上辺中央
+        const lx1=bp.x+BALLOON_W/2, ly1=bp.y;
+        // ベジェ制御点
+        const cy0=ly0+(ly1-ly0)*0.45;
+        return (
+          <g key={"b"+n.id}>
+            {/* 引き出し線 */}
+            <path d={`M ${lx0} ${ly0} C ${lx0} ${cy0} ${lx1} ${cy0} ${lx1} ${ly1}`}
+              fill="none" stroke={st.stroke} strokeWidth="1.2" strokeDasharray="4,3" strokeOpacity="0.7"/>
+            <circle cx={lx0} cy={ly0} r="2.5" fill={st.stroke} fillOpacity="0.5"/>
+            {/* 吹き出し矩形 */}
+            <rect x={bp.x} y={bp.y} width={BALLOON_W} height={BALLOON_H} rx="5"
+              fill="white" stroke={st.stroke} strokeWidth="1.5" filter="none"/>
+            {/* ヘッダバー */}
+            <rect x={bp.x} y={bp.y} width={BALLOON_W} height={16} rx="5" fill={st.stroke} fillOpacity="0.15"/>
+            <rect x={bp.x} y={bp.y+10} width={BALLOON_W} height={6} fill={st.stroke} fillOpacity="0.15"/>
+            <text x={bp.x+6} y={bp.y+11} fill={st.stroke} fontSize="8" fontFamily="monospace" fontWeight="bold">
+              {n.status==="added"?"＋ 追加":"✎ 変更"} — {(n.label||"").slice(0,12)}
+            </text>
+            {/* コメント本文 */}
+            <text x={bp.x+6} y={bp.y+27} fill="#333" fontSize="9" fontFamily="sans-serif">
+              {(n.comment||"").slice(0,22)}{(n.comment||"").length>22?"…":""}
+            </text>
+            {/* 理由 */}
+            <text x={bp.x+6} y={bp.y+41} fill="#888" fontSize="8" fontFamily="sans-serif">
+              {"理由: "+(n.reason||"").slice(0,24)}{(n.reason||"").length>24?"…":""}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function FlowEditor({ nodes, edges, onNodesChange, onEdgesChange }) {
+  const svgRef = React.useRef(null);
+  const NW = 126, NH = 38;
+
+  // モード: "normal" | "conn_from" | "conn_to"
+  const [mode,      setMode]      = React.useState("normal");
+  const [connFrom,  setConnFrom]  = React.useState(null);
+  const [dragging,  setDragging]  = React.useState(null); // {id, ox, oy}
+  const [panning,   setPanning]   = React.useState(null);
+  const [mousePos,  setMousePos]  = React.useState({ x:0, y:0 });
+  const [editId,    setEditId]    = React.useState(null);
+  const [editVal,   setEditVal]   = React.useState("");
+  const [vb,        setVb]        = React.useState({ x:0, y:0, w:960, h:230 });
+
+  const toSVG = (cx, cy) => {
+    const r = svgRef.current.getBoundingClientRect();
+    return {
+      x: vb.x + (cx - r.left) * (vb.w / r.width),
+      y: vb.y + (cy - r.top)  * (vb.h / r.height),
+    };
+  };
+
+  // ── ノードクリック（接続モード用） ──────────────────────────────
+  const handleNodeClick = (e, nodeId) => {
+    e.stopPropagation();
+    if (mode === "conn_from") {
+      setConnFrom(nodeId);
+      setMode("conn_to");
+      return;
+    }
+    if (mode === "conn_to") {
+      if (nodeId !== connFrom) {
+        const exists = edges.some(ed => ed.from === connFrom && ed.to === nodeId);
+        if (!exists) onEdgesChange([...edges, { id:"e"+Date.now(), from:connFrom, to:nodeId }]);
+      }
+      setConnFrom(null);
+      setMode("conn_from"); // 連続で接続できるよう接続元選択に戻す
+      return;
+    }
+  };
+
+  // ── ノードMouseDown（ドラッグ用、通常モードのみ） ───────────────
+  const handleNodeMouseDown = (e, nodeId) => {
+    if (mode !== "normal") return;
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const node = nodes.find(n => n.id === nodeId);
+    const sv = toSVG(e.clientX, e.clientY);
+    setDragging({ id: nodeId, ox: sv.x - node.x, oy: sv.y - node.y });
+  };
+
+  // ── SVGMouseDown（パン） ─────────────────────────────────────────
+  const handleSVGMouseDown = (e) => {
+    if (mode !== "normal") return;
+    if (e.altKey || e.button === 1) {
+      e.preventDefault();
+      setPanning({ sx: e.clientX, sy: e.clientY, vx: vb.x, vy: vb.y });
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!svgRef.current) return;
+    const sv = toSVG(e.clientX, e.clientY);
+    setMousePos(sv);
+    if (dragging) {
+      onNodesChange(nodes.map(n =>
+        n.id === dragging.id ? { ...n, x: sv.x - dragging.ox, y: sv.y - dragging.oy } : n
+      ));
+    }
+    if (panning) {
+      const r = svgRef.current.getBoundingClientRect();
+      setVb(v => ({
+        ...v,
+        x: panning.vx - (e.clientX - panning.sx) * (v.w / r.width),
+        y: panning.vy - (e.clientY - panning.sy) * (v.h / r.height),
+      }));
+    }
+  };
+
+  const handleMouseUp = () => { setDragging(null); setPanning(null); };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const f  = e.deltaY > 0 ? 1.12 : 0.89;
+    const sv = toSVG(e.clientX, e.clientY);
+    setVb(v => {
+      const nw = Math.min(2400, Math.max(360, v.w * f));
+      const nh = nw * (v.h / v.w);
+      return { x: sv.x-(sv.x-v.x)*(nw/v.w), y: sv.y-(sv.y-v.y)*(nh/v.h), w: nw, h: nh };
+    });
+  };
+
+  const addNode = () => {
+    const id = "n" + Date.now();
+    onNodesChange([...nodes, { id, label:"新規工程", x: vb.x+vb.w/2-NW/2, y: vb.y+vb.h/2-NH/2 }]);
+    setEditId(id); setEditVal("新規工程");
+  };
+
+  const removeNode = (id) => {
+    onNodesChange(nodes.filter(n => n.id !== id));
+    onEdgesChange(edges.filter(ed => ed.from !== id && ed.to !== id));
+  };
+
+  const commitEdit = () => {
+    if (editId) {
+      onNodesChange(nodes.map(n => n.id === editId ? { ...n, label: editVal } : n));
+      setEditId(null);
+    }
+  };
+
+  const edgePath = (ed) => {
+    const f = nodes.find(n => n.id === ed.from);
+    const t = nodes.find(n => n.id === ed.to);
+    if (!f || !t) return null;
+    const fx = f.x + NW, fy = f.y + NH/2;
+    const tx = t.x,      ty = t.y + NH/2;
+    if (Math.abs(fy - ty) < 3) return `M ${fx} ${fy} L ${tx} ${ty}`;
+    const mx = (fx + tx) / 2;
+    return `M ${fx} ${fy} C ${mx} ${fy} ${mx} ${ty} ${tx} ${ty}`;
+  };
+
+  const modeLabel = { normal:"", conn_from:"→ 接続元を選択", conn_to:"→ 接続先を選択" };
+  const isConn = mode !== "normal";
+
+  return (
+    <div style={{ userSelect:"none" }}>
+      {/* ツールバー */}
+      <div style={{ display:"flex", gap:7, marginBottom:7, flexWrap:"wrap", alignItems:"center" }}>
+        <button onClick={addNode}
+          style={{ padding:"4px 11px", background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.25)", color:"white", fontFamily:"monospace", fontSize:11, cursor:"pointer", borderRadius:2 }}>
+          ＋ 追加
+        </button>
+        <button
+          onClick={() => {
+            if (isConn) { setMode("normal"); setConnFrom(null); }
+            else        { setMode("conn_from"); }
+          }}
+          style={{ padding:"4px 11px", background: isConn ? "#c9920a" : "rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.25)", color: isConn ? "#1a2f5a" : "white", fontFamily:"monospace", fontSize:11, cursor:"pointer", borderRadius:2, fontWeight: isConn ? "bold" : "normal", minWidth:140 }}>
+          {isConn ? modeLabel[mode] : "→ 接続モード"}
+        </button>
+        {isConn && (
+          <span style={{ color:"#c9920a", fontSize:10, fontFamily:"monospace" }}>
+            {mode === "conn_from" ? "接続元ノードをクリック" : "接続先ノードをクリック"}
+          </span>
+        )}
+        <button onClick={() => setVb({ x:0, y:0, w:960, h:230 })}
+          style={{ padding:"4px 9px", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.4)", fontFamily:"monospace", fontSize:10, cursor:"pointer", borderRadius:2 }}>
+          ⟳ 表示リセット
+        </button>
+        <span style={{ fontSize:9, color:"rgba(255,255,255,0.25)", fontFamily:"monospace" }}>
+          ドラッグ:移動　ダブルクリック:名前編集　Alt+ドラッグ:パン　ホイール:ズーム
+        </span>
+      </div>
+
+      {/* キャンバス */}
+      <svg ref={svgRef}
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+        style={{ width:"100%", height:230, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:4, cursor: isConn ? "crosshair" : panning ? "grabbing" : "default", display:"block" }}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onMouseDown={handleSVGMouseDown}
+        onWheel={handleWheel}
+      >
+        <defs>
+          <marker id="fe-a" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <polygon points="0 0,7 2.5,0 5" fill="#7a9cc8"/>
+          </marker>
+          <marker id="fe-ac" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <polygon points="0 0,7 2.5,0 5" fill="#c9920a"/>
+          </marker>
+          <pattern id="fe-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.035)" strokeWidth="1"/>
+          </pattern>
+        </defs>
+        <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#fe-grid)"/>
+
+        {/* 接続中のプレビュー線 */}
+        {mode === "conn_to" && connFrom && (() => {
+          const fn = nodes.find(n => n.id === connFrom);
+          if (!fn) return null;
+          return <line x1={fn.x+NW} y1={fn.y+NH/2} x2={mousePos.x} y2={mousePos.y}
+            stroke="#c9920a" strokeWidth="1.5" strokeDasharray="5,3"/>;
+        })()}
+
+        {/* エッジ（クリックで削除） */}
+        {edges.map(ed => {
+          const d = edgePath(ed);
+          if (!d) return null;
+          return (
+            <g key={ed.id} style={{ cursor:"pointer" }}
+              onClick={e => { if (mode === "normal") { e.stopPropagation(); onEdgesChange(edges.filter(x => x.id !== ed.id)); } }}>
+              <path d={d} fill="none" stroke="transparent" strokeWidth="12"/>
+              <path d={d} fill="none" stroke="#7a9cc8" strokeWidth="1.5" markerEnd="url(#fe-a)" style={{ pointerEvents:"none" }}/>
+            </g>
+          );
+        })}
+
+        {/* ノード */}
+        {nodes.map(node => {
+          const isFrom = mode === "conn_to"   && connFrom === node.id;
+          const isHint = mode === "conn_from";
+          const isTo   = mode === "conn_to"   && connFrom !== node.id;
+          return (
+            <g key={node.id}
+              style={{ cursor: isConn ? "pointer" : dragging?.id === node.id ? "grabbing" : "grab" }}
+              onMouseDown={e => handleNodeMouseDown(e, node.id)}
+              onClick={e => handleNodeClick(e, node.id)}
+              onDoubleClick={e => {
+                e.stopPropagation();
+                if (mode !== "normal") return;
+                setEditId(node.id); setEditVal(node.label);
+              }}
+            >
+              {/* ハイライト枠 */}
+              {(isFrom || isTo) && (
+                <rect x={node.x-3} y={node.y-3} width={NW+6} height={NH+6} rx="9"
+                  fill="none" stroke={isFrom ? "#c9920a" : "#afd0ff"} strokeWidth="2"
+                  strokeDasharray={isTo ? "5,3" : "none"}/>
+              )}
+              <rect x={node.x} y={node.y} width={NW} height={NH} rx="6"
+                fill={isFrom ? "#c9920a" : "#4a90d9"}
+                fillOpacity={isFrom ? 0.4 : isHint ? 0.22 : 0.15}
+                stroke={isFrom ? "#c9920a" : "#7a9cc8"} strokeWidth="1.5"/>
+              {editId === node.id ? (
+                <foreignObject x={node.x+4} y={node.y+7} width={NW-8} height={NH-14}>
+                  <input value={editVal}
+                    onChange={e => setEditVal(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={e => { if(e.key==="Enter") commitEdit(); e.stopPropagation(); }}
+                    autoFocus
+                    style={{ width:"100%", background:"rgba(0,0,0,0.75)", border:"none", color:"white", textAlign:"center", fontFamily:"sans-serif", fontSize:11, outline:"none", borderRadius:2, boxSizing:"border-box" }}
+                  />
+                </foreignObject>
+              ) : (
+                <text x={node.x+NW/2} y={node.y+NH/2} textAnchor="middle" dominantBaseline="middle"
+                  fill="white" fontSize={11} fontWeight="bold" fontFamily="sans-serif"
+                  style={{ pointerEvents:"none" }}>
+                  {node.label.length > 10 ? node.label.slice(0,9)+"…" : node.label}
+                </text>
+              )}
+              {/* 削除ボタン（通常モードのみ） */}
+              {mode === "normal" && (
+                <g onClick={e => { e.stopPropagation(); removeNode(node.id); }} style={{ cursor:"pointer" }}>
+                  <rect x={node.x+NW-14} y={node.y} width={14} height={14} rx="3" fill="rgba(192,57,43,0.0)"/>
+                  <text x={node.x+NW-7} y={node.y+8} textAnchor="middle" dominantBaseline="middle"
+                    fill="rgba(255,130,120,0.6)" fontSize={12} fontFamily="monospace"
+                    style={{ pointerEvents:"none" }}>×</text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* 凡例 */}
+      <div style={{ display:"flex", gap:14, marginTop:6, flexWrap:"wrap" }}>
+        {[
+          { c:"#7a9cc8",  l:"ノード（ドラッグ移動 / ダブルクリック名前編集）" },
+          { c:"#c9920a",  l:"接続モード: 接続元→接続先の順にクリック" },
+          { c:"#ff8888",  l:"右上 × でノード削除　/ エッジクリックで削除" },
+        ].map(item => (
+          <div key={item.l} style={{ display:"flex", alignItems:"center", gap:5 }}>
+            <div style={{ width:8, height:8, borderRadius:"50%", background:item.c }}/>
+            <span style={{ color:"rgba(255,255,255,0.35)", fontSize:9, fontFamily:"monospace" }}>{item.l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopBar({ badge }) {
+  return (
+    <div style={{ background: "#0d0d14", padding: "0 32px", height: 54, display: "flex", alignItems: "center", gap: 16, borderBottom: "3px solid #c9920a" }}>
+      <span style={{ fontFamily: "monospace", fontSize: 18, fontWeight: 700, color: "#c9920a", letterSpacing: "0.25em" }}>SYNTHESIS</span>
+      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>集合知 → 役員提案 Multi-Agent</span>
+      {badge && <span style={{ marginLeft: "auto", background: badge.bg, color: badge.fg, fontFamily: "monospace", fontSize: 10, fontWeight: 700, padding: "3px 12px", borderRadius: 10 }}>{badge.label}</span>}
+    </div>
+  );
+}
+
+// ── メインApp ────────────────────────────────────────────────────
+function App() {
+  const seq      = useRef(DEMO.length + 1);
+  const allImages = useRef([]);
+
+  const [members, setMembers] = useState(() => DEMO.map((m, i) => ({ ...m, id: i+1 })));
+  const [flowNodes, setFlowNodes] = useState(DEFAULT_NODES);
+  const [flowEdges, setFlowEdges] = useState(DEFAULT_EDGES);
+  const [theme,   setTheme]   = useState("営業プロセスDX改革プロジェクト");
+  const [goal,    setGoal]    = useState("来期Q1からの段階的導入に向けた予算3,000万円承認・横断TF設置");
+  const [bg,      setBg]      = useState("当社の営業プロセスは10年前から大きく変わっておらず、競合他社に対しデジタル活用で遅れをとっている。");
+  const [phase,   setPhase]   = useState("input");
+  const [prog,    setProg]    = useState(0);
+  const [agSt,    setAgSt]    = useState({});
+  const [result,  setResult]  = useState(null);
+  const [svgData, setSvgData] = useState(null);
+  const [causalData, setCausalData] = useState(null);
+  const [svgGenStep, setSvgGenStep]  = useState(0);
+  const [toBeData,   setToBeData]   = useState(null);
+  const [svgLoading, setSvgLoading] = useState(false);
+  const [activeTab, setActiveTab]   = useState("proposal");
+  const [err,     setErr]     = useState("");
+  const [copied,  setCopied]  = useState(false);
+
+  const updateMember = (id, f, v) => setMembers(ms => ms.map(m => m.id===id ? {...m,[f]:v} : m));
+  const setAg = (id, status, text) => setAgSt(prev => ({...prev,[id]:{status,text:text||""}}));
+
+  const run = async () => {
+    const valid = members.filter(m => m.problem || m.ideal || m.measure);
+    if (valid.length < 2) { setErr("最低2名のメンバー入力が必要です"); return; }
+    setErr(""); setPhase("processing"); setProg(0); setAgSt({});
+
+    const voices = valid.map(m =>
+      "【" + m.name + (m.role ? " / "+m.role : "") + "】\n■問題: "+m.problem+"\n■あるべき姿: "+m.ideal+"\n■主要方策: "+m.measure
+    ).join("\n\n---\n\n");
+    const processText = flowNodes.length > 0
+      ? "\n現状プロセス: " + flowNodes.map(n => n.label).join(", ") + " / 接続: " + flowEdges.map(e => { const f=flowNodes.find(n=>n.id===e.from); const t=flowNodes.find(n=>n.id===e.to); return f&&t?f.label+"→"+t.label:""; }).filter(Boolean).join(", ")
+      : "";
+    const ctx = "テーマ: "+theme+"\n役員決裁ゴール: "+goal+(bg?"\n背景: "+bg:"")+processText;
+
+    try {
+      setAg(1,"active"); setProg(8);
+      const insights = await callClaude(AGENTS[0].sys, ctx+"\n\n参加者の意見:\n"+voices, AGENTS[0].tokens);
+      setAg(1,"done",insights); setProg(22);
+
+      setAg(2,"active"); setProg(28);
+      const tensions = await callClaude(AGENTS[1].sys, ctx+"\n\n本質的問題意識:\n"+insights+"\n\n元の意見:\n"+voices, AGENTS[1].tokens);
+      setAg(2,"done",tensions); setProg(45);
+
+      setAg(3,"active"); setProg(50);
+      const strategy = await callClaude(AGENTS[2].sys, ctx+"\n\n止揚分析:\n"+tensions+"\n\n元の意見:\n"+voices, AGENTS[2].tokens);
+      setAg(3,"done",strategy); setProg(65);
+
+      setAg(4,"active"); setProg(70);
+      const slides = await callClaude(AGENTS[3].sys, ctx+"\n\n統合戦略:\n"+strategy, AGENTS[3].tokens);
+      setAg(4,"done",slides); setProg(85);
+
+      setAg(5,"active"); setProg(92);
+      const review = await callClaude(AGENTS[4].sys, ctx+"\n\n提案内容:\n"+strategy, AGENTS[4].tokens);
+      setAg(5,"done",review); setProg(100);
+
+      const res={theme,valid,insights,tensions,strategy,slides,review};
+      setResult(res);
+      setActiveTab("input");
+      setPhase("result");
+      // SVG群を自動生成（シーケンシャル）
+      const snapNodes=[...flowNodes], snapEdges=[...flowEdges];
+      setTimeout(()=>{ generateSVGWith(res, valid, voices, snapNodes, snapEdges); }, 300);
+    } catch(e) {
+      setErr("エラー: "+e.message); setPhase("input");
+    }
+  };
+
+  const generateSVGWith = async (res, validMembers, voicesText, curFlowNodes, curFlowEdges) => {
+    setSvgLoading(true); setSvgGenStep(0);
+    try {
+      // Step1: 戦略マップ/ロードマップ/ステークホルダー
+      setSvgGenStep(1);
+      const prompt = "テーマ: "+res.theme+"\n\n統合戦略:\n"+res.strategy+"\n\n参加メンバー: "+validMembers.map(m=>m.name+"（"+m.role+"）").join("、");
+      const raw = await callClaude(SVG_SYS, prompt, 1800);
+      const base = safeParseJSON(raw);
+      // Step2: 問題ツリー
+      setSvgGenStep(2);
+      const pfRaw = await callClaude(PROBLEM_TREE_SYS, "テーマ: "+res.theme+"\n\n"+voicesText, 900);
+      const pf = safeParseJSON(pfRaw);
+      setSvgData({...base, problemTree: pf});
+      // Step3: 因果連鎖
+      setSvgGenStep(3);
+      const ccRaw = await callClaude(CAUSAL_CHAIN_SYS,
+        "テーマ: "+res.theme+"\n\n統合戦略:\n"+res.strategy+"\n\nメンバーの声:\n"+voicesText, 1400);
+      const cc = safeParseJSON(ccRaw);
+      setCausalData(cc);
+      // Step4: To-Beプロセス
+      setSvgGenStep(4);
+      const processDesc2 = curFlowNodes.map(n=>n.id+":"+n.label).join(", ");
+      const edgesDesc2   = curFlowEdges.map(e=>{const f=curFlowNodes.find(x=>x.id===e.from);const t=curFlowNodes.find(x=>x.id===e.to);return f&&t?f.label+"→"+t.label:"";}).filter(Boolean).join(", ");
+      const toBePrompt   = "テーマ: "+res.theme+"\n現状プロセスノード（IDと名前）: "+processDesc2+"\n現状エッジ: "+edgesDesc2+"\n\n統合戦略:\n"+res.strategy+"\n\nメンバーの課題:\n"+voicesText;
+      const toBeRaw      = await callClaude(PROCESS_TO_BE_SYS, toBePrompt, 2000);
+      const toBe         = safeParseJSON(toBeRaw);
+      setToBeData(toBe);
+      setSvgGenStep(5);
+    } catch(e) { setErr("図解生成エラー (Step"+svgGenStep+"): "+e.message); }
+    setSvgLoading(false);
+  };
+  const generateSVG = () => {
+    if (!result) return;
+    const voicesText = result.valid.map(m=>"【"+m.name+"】\n■現状の問題: "+m.problem+"\n■あるべき姿: "+m.ideal+"\n■主要方策: "+m.measure).join("\n\n");
+    generateSVGWith(result, result.valid, voicesText, flowNodes, flowEdges);
+  };
+
+
+
+  const exportPDF = () => {
+    if (!result) return;
+    const dateStr = new Date().toLocaleDateString("ja-JP");
+
+    const getSVGHtml = (id) => {
+      const el = document.getElementById(id);
+      if (!el) return "";
+      const svg = el.querySelector("svg");
+      return svg ? svg.outerHTML : "";
+    };
+
+    const esc = (t) => (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+
+    const svgIds = ["svg-problem-tree","svg-strategy","svg-roadmap","svg-stakeholder","svg-causal"];
+    const svgLabels = ["① 問題・課題ツリー図","② 戦略マップ","③ ロードマップ","④ ステークホルダーマップ","⑤ 因果連鎖グラフ"];
+    const svgSections = svgIds.map((id,i) => {
+      const h = getSVGHtml(id);
+      return h ? `<div class="svg-label">${svgLabels[i]}</div><div class="svg-wrap">${h}</div>` : "";
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>${(result.theme||"提案書").replace(/</g,"&lt;")}</title>
+<style>
+@page{size:A4;margin:14mm 14mm 12mm 14mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Meiryo","Hiragino Kaku Gothic Pro",sans-serif;font-size:9pt;color:#1f2937;background:white}
+/* 表紙: page-break-afterをなくし、コンパクトに */
+.cover{background:#1a2f5a;color:white;padding:20px 20px 16px;border-bottom:3px solid #c9920a;margin-bottom:14px}
+.cover .ey{font-family:monospace;font-size:6.5pt;letter-spacing:.4em;color:rgba(255,255,255,.45);margin-bottom:5px}
+.cover h1{font-size:16pt;font-weight:900;line-height:1.25;margin-bottom:8px}
+.cover .mt{font-size:7.5pt;color:rgba(255,255,255,.65)}
+/* ページヘッダー（印刷ページ用）*/
+.hdr{background:#1a2f5a;color:white;padding:3px 8px;display:flex;justify-content:space-between;margin-bottom:10px;border-radius:2px}
+.hdr .lo{font-family:monospace;font-size:8pt;font-weight:bold;color:#c9920a;letter-spacing:.2em}
+.hdr .me{font-size:6pt;color:rgba(255,255,255,.6)}
+.sec{margin-bottom:14px;page-break-inside:avoid}
+.st{font-size:9.5pt;font-weight:bold;color:#1a2f5a;border-left:4px solid #1a2f5a;padding:2px 0 2px 8px;margin-bottom:6px}
+.st.r{color:#c0392b;border-color:#c0392b}
+.st.g{color:#c9920a;border-color:#c9920a}
+.st.v{color:#1a5c3a;border-color:#1a5c3a}
+.bt{font-size:8pt;line-height:1.8;color:#222;padding-left:3px}
+/* マークダウン記号を非表示 */
+.bt{white-space:pre-wrap}
+/* ページ区切り */
+.pb{page-break-before:always;margin-bottom:10px}
+/* SVG図 */
+.svg-label{font-family:monospace;font-size:7pt;color:#888;letter-spacing:.3em;margin:6px 0 3px 1px}
+.svg-wrap{border:1px solid #e8e4dc;border-radius:3px;background:#fafaf8;overflow:hidden;margin-bottom:10px}
+.svg-wrap svg{width:100%!important;height:auto!important;display:block;max-height:180px}
+/* TO-BEプロセス: テキストが枠内に収まるよう */
+.svg-wrap.process svg{max-height:none}
+.hint{margin:12px 0;padding:8px 12px;border:1px dashed #c9920a;border-radius:4px;font-size:7.5pt;color:#7a5200;background:#fffbf0;text-align:center}
+@media print{.hint{display:none} body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+
+<div class="hint">📄 Ctrl+P（Cmd+P）→ 送信先「PDFに保存」を選択してください</div>
+
+<!-- 表紙（コンパクト、改ページなし） -->
+<div class="cover">
+  <div class="ey">SYNTHESIS — AI 統合提案書</div>
+  <h1>${(result.theme||"").replace(/</g,"&lt;")}</h1>
+  <div class="mt">参加者 ${result.valid?result.valid.length:0} 名 ／ ${dateStr} 生成</div>
+</div>
+
+<!-- 提案本文 -->
+<div class="sec"><div class="st r">1. 統合戦略 — Strategic Synthesizer</div><div class="bt">${esc(result.strategy)}</div></div>
+<div class="sec"><div class="st">2. 本質的な問題意識 — Insight Extractor</div><div class="bt">${esc(result.insights)}</div></div>
+<div class="sec"><div class="st v">3. 視点の止揚分析 — Tension Mapper</div><div class="bt">${esc(result.tensions)}</div></div>
+<div class="sec"><div class="st g">4. スライド構成 — Slide Architect</div><div class="bt">${esc(result.slides)}</div></div>
+<div class="sec"><div class="st v">5. 役員視点レビュー — Quality Reviewer</div><div class="bt">${esc(result.review)}</div></div>
+
+<!-- プロセス改革図（改ページ） -->
+<div class="pb"></div>
+<div class="hdr"><span class="lo">SYNTHESIS</span><span class="me">プロセス改革図</span></div>
+<div class="sec"><div class="st">6. プロセス改革図</div>
+  <div class="svg-label">AS-IS — 現状のプロセス</div>
+  <div class="svg-wrap process">${getSVGHtml("pdf-asis")}</div>
+  <div class="svg-label">TO-BE — 目指すプロセス</div>
+  <div class="svg-wrap process">${getSVGHtml("pdf-tobe")}</div>
+</div>
+
+<!-- SVG図解（改ページ・最後） -->
+${svgSections ? `<div class="pb"></div><div class="hdr"><span class="lo">SYNTHESIS</span><span class="me">図解</span></div><div class="sec"><div class="st">7. 図解</div>${svgSections}</div>` : ""}
+
+</body></html>`;
+
+    // Blob → <a> でHTMLファイルとしてダウンロード（ポップアップ不要）
+    const fname = (result.theme||"proposal").replace(/[^\w\u3040-\u9fff]/g,"_").slice(0,30)+"_proposal.html";
+    const blob  = new Blob([html], {type:"text/html;charset=utf-8"});
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement("a");
+    a.href = url; a.download = fname; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  };
+
+  const downloadSVG = (id, filename) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const svgEl = el.querySelector("svg");
+    if (!svgEl) return;
+    const blob = new Blob([svgEl.outerHTML], {type:"image/svg+xml"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download=filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadImagesZip = async () => {
+    if (!allImages.current.length) return;
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+    const JSZip = window.JSZip;
+    const zip = new JSZip();
+    const folder = zip.folder("images");
+    allImages.current.forEach((img, i) => {
+      const b64 = img.b64;
+      folder.file(img.name || ("image_"+i+".jpg"), b64, {base64:true});
+    });
+    const blob = await zip.generateAsync({type:"blob"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download="synthesis_images.zip"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseSlides = (text) =>
+    (text||"").split("\n").filter(l=>/^\d/.test(l.trim())).map((l,i) => {
+      const m = l.match(/^(\d+)[.)]\s*(.+?)(?:\s*[-–—]\s*(.+))?$/);
+      return {num:m?m[1]:String(i+1), title:m?m[2]:l, sub:m&&m[3]?m[3]:""};
+    });
+
+  const copyText = (text) => {
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false),2000); });
+  };
+
+  const reset = () => {
+    setPhase("input"); setProg(0); setAgSt({}); setResult(null); setSvgData(null);
+    setCausalData(null);
+    setToBeData(null);
+    setSvgGenStep(0);
+    setErr(""); setCopied(false); setActiveTab("proposal");
+    allImages.current = [];
+    setMembers(DEMO.map((m,i) => ({...m,id:i+1})));
+    setFlowNodes(DEFAULT_NODES);
+    setFlowEdges(DEFAULT_EDGES);
+    setTheme("営業プロセスDX改革プロジェクト");
+    setGoal("来期Q1からの段階的導入に向けた予算3,000万円承認・横断TF設置");
+    setBg("当社の営業プロセスは10年前から大きく変わっておらず、競合他社に対しデジタル活用で遅れをとっている。");
+    seq.current = DEMO.length + 1;
+  };
+
+  const BG = "#f4f0e8";
+
+  // ── INPUT ──
+  if (phase === "input") {
+    return (
+      <div style={{background:BG, minHeight:"100vh"}}>
+        <TopBar badge={{label:"DEMO MODE", bg:"#c9920a", fg:"#1a2f5a"}} />
+        <div style={{maxWidth:1080, margin:"0 auto", padding:"36px 24px"}}>
+          <div style={{background:"#1a2f5a", color:"white", padding:"24px 28px", borderRadius:4, marginBottom:30}}>
+            <div style={{fontSize:11, fontFamily:"monospace", letterSpacing:"0.4em", color:"rgba(255,255,255,0.4)", marginBottom:6}}>CONTEXT</div>
+            <div style={{fontSize:20, fontWeight:900, borderBottom:"1px solid rgba(255,255,255,0.15)", paddingBottom:12, marginBottom:18}}>提案の背景・目的</div>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:14}}>
+              {[{label:"テーマ / プロジェクト名", val:theme, set:setTheme, ph:"例：営業DX推進"},{label:"役員への決裁ゴール", val:goal, set:setGoal, ph:"例：予算承認・TF設置"}].map(f => (
+                <div key={f.label}>
+                  <div style={{fontSize:9, fontFamily:"monospace", letterSpacing:"0.3em", color:"rgba(255,255,255,0.4)", marginBottom:5}}>{f.label}</div>
+                  <input value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.ph}
+                    style={{width:"100%", background:"rgba(255,255,255,0.09)", border:"1px solid rgba(255,255,255,0.2)", color:"white", padding:"8px 11px", fontSize:13, borderRadius:2, outline:"none", fontFamily:"inherit", boxSizing:"border-box"}} />
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:9, fontFamily:"monospace", letterSpacing:"0.3em", color:"rgba(255,255,255,0.4)", marginBottom:5}}>背景・現状の概要</div>
+            <textarea value={bg} onChange={e=>setBg(e.target.value)} rows={2}
+              style={{width:"100%", background:"rgba(255,255,255,0.09)", border:"1px solid rgba(255,255,255,0.2)", color:"white", padding:"8px 11px", fontSize:13, borderRadius:2, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box"}} />
+            <div style={{fontSize:9, fontFamily:"monospace", letterSpacing:"0.3em", color:"rgba(255,255,255,0.4)", marginTop:18, marginBottom:8}}>現状のプロセス</div>
+            <FlowEditor nodes={flowNodes} edges={flowEdges} onNodesChange={setFlowNodes} onEdgesChange={setFlowEdges} />
+          </div>
+
+          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16}}>
+            <div style={{fontSize:20, fontWeight:900, borderBottom:"2px solid #e5e0d8", paddingBottom:8}}>メンバーの視点を入力</div>
+            <span style={{fontFamily:"monospace", fontSize:12, color:"#888", background:"rgba(0,0,0,0.06)", padding:"4px 14px", borderRadius:20}}>{members.length} 名</span>
+          </div>
+
+          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:14, marginBottom:14}}>
+            {members.map((m, idx) => (
+              <MemberCard key={m.id} m={m} idx={idx} allImages={allImages}
+                onUpdate={(f,v) => updateMember(m.id,f,v)}
+                onRemove={() => setMembers(ms => ms.filter(x => x.id !== m.id))} />
+            ))}
+          </div>
+
+          <button onClick={() => { const id=seq.current++; setMembers(ms=>[...ms,{id,name:"",role:"",problem:"",ideal:"",measure:""}]); }}
+            style={{width:"100%", border:"2px dashed #ccc", background:"transparent", color:"#aaa", padding:13, fontFamily:"monospace", fontSize:12, cursor:"pointer", borderRadius:2, marginBottom:28}}>
+            ＋ メンバーを追加
+          </button>
+
+          <div style={{textAlign:"center"}}>
+            <button onClick={run}
+              style={{background:"#c0392b", color:"white", border:"none", padding:"15px 52px", cursor:"pointer", fontFamily:"monospace", fontSize:13, letterSpacing:"0.2em", borderRadius:2}}>
+              AIエージェント起動 → 提案を生成
+            </button>
+            <div style={{marginTop:8, fontSize:10, color:"#aaa", fontFamily:"monospace"}}>Claude 5エージェントが自動オーケストレーション</div>
+            {err && <div style={{background:"#fff0ee", border:"1px solid #c0392b", color:"#c0392b", padding:"9px 16px", fontFamily:"monospace", fontSize:11, borderRadius:2, marginTop:10, display:"inline-block"}}>{err}</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── PROCESSING ──
+  if (phase === "processing") {
+    return (
+      <div style={{background:BG, minHeight:"100vh"}}>
+        <TopBar />
+        <div style={{maxWidth:860, margin:"0 auto", padding:"44px 24px"}}>
+          <div style={{textAlign:"center", marginBottom:32}}>
+            <div style={{fontSize:28, fontWeight:900, marginBottom:6}}>AIエージェントが思考中</div>
+            <div style={{fontFamily:"monospace", fontSize:11, color:"#aaa", letterSpacing:"0.2em"}}>複数エージェントが連携して提案を構築しています</div>
+          </div>
+          <div style={{height:4, background:"#e0dbd0", borderRadius:2, marginBottom:32, overflow:"hidden"}}>
+            <div style={{height:"100%", background:"#c0392b", width:prog+"%"}} />
+          </div>
+          <div style={{position:"relative"}}>
+            <div style={{position:"absolute", left:21, top:22, bottom:22, width:2, background:"#e5e0d8"}} />
+            {AGENTS.map(ag => (
+              <AgentRow key={ag.id} ag={ag} status={(agSt[ag.id]||{}).status} text={(agSt[ag.id]||{}).text} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── RESULT ──
+  if (phase === "result" && result) {
+    const slideList = parseSlides(result.slides);
+    const fullText = "【統合提案書】"+result.theme+"\n\n"+"=".repeat(36)+"\n\n■ 統合戦略\n\n"+result.strategy+"\n\n"+"=".repeat(36)+"\n\n■ スライド構成\n\n"+result.slides+"\n\n"+"=".repeat(36)+"\n\n■ 役員レビュー\n\n"+result.review;
+    const tabs = [{id:"input",label:"✏ 入力"},{id:"proposal",label:"📄 提案内容"},{id:"diagram",label:"🗺 SVG図解"}];
+    const imgs = allImages.current;
+
+    return (
+      <div style={{background:BG, minHeight:"100vh"}}>
+        <TopBar badge={{label:"✓ COMPLETE", bg:"#1a5c3a", fg:"white"}} />
+        <div style={{maxWidth:1000, margin:"0 auto", padding:"28px 24px"}}>
+
+          <div style={{background:"#0d0d14", color:"white", padding:"36px 36px 28px", borderRadius:"4px 4px 0 0"}}>
+            <div style={{fontFamily:"monospace", fontSize:9, letterSpacing:"0.5em", color:"#c9920a", marginBottom:10}}>✦ SYNTHESIZED PROPOSAL — COMPLETE</div>
+            <div style={{fontSize:26, fontWeight:900, marginBottom:14, lineHeight:1.2}}>{result.theme}</div>
+            <div style={{display:"flex", flexWrap:"wrap", gap:7}}>
+              {result.valid.map((m,i) => (
+                <span key={i} style={{padding:"3px 12px", borderRadius:16, fontFamily:"monospace", fontSize:10, color:"white", background:COLORS[i%COLORS.length], fontWeight:700}}>
+                  {m.name}{m.role?" · "+m.role:""}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div style={{display:"flex", borderBottom:"2px solid #0d0d14", background:"white", borderLeft:"2px solid #0d0d14", borderRight:"2px solid #0d0d14"}}>
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                style={{padding:"12px 24px", fontFamily:"monospace", fontSize:11, letterSpacing:"0.1em", cursor:"pointer", border:"none", borderBottom:activeTab===t.id?"3px solid #c0392b":"3px solid transparent", background:"transparent", color:activeTab===t.id?"#c0392b":"#888", fontWeight:activeTab===t.id?700:400, marginBottom:-2}}>
+                {t.label}
+              </button>
+            ))}
+            {imgs.length > 0 && (
+              <button onClick={downloadImagesZip}
+                style={{marginLeft:"auto", padding:"10px 16px", fontFamily:"monospace", fontSize:10, cursor:"pointer", border:"none", background:"transparent", color:"#888"}}>
+                📦 画像ZIP ({imgs.length}枚)
+              </button>
+            )}
+          </div>
+
+          {activeTab === "input" && (
+            <div style={{background:"white", border:"2px solid #0d0d14", borderTop:"none", padding:"28px 36px"}}>
+              <div style={{background:"#1a2f5a", color:"white", padding:"20px 24px", borderRadius:4, marginBottom:24}}>
+                <div style={{fontSize:11, fontFamily:"monospace", letterSpacing:"0.4em", color:"rgba(255,255,255,0.4)", marginBottom:6}}>CONTEXT</div>
+                <div style={{fontSize:16, fontWeight:900, borderBottom:"1px solid rgba(255,255,255,0.15)", paddingBottom:10, marginBottom:16}}>提案の背景・目的</div>
+                <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:12}}>
+                  {[{label:"テーマ / プロジェクト名", val:theme, set:setTheme, ph:"例：営業DX推進"},{label:"役員への決裁ゴール", val:goal, set:setGoal, ph:"例：予算承認・TF設置"}].map(f => (
+                    <div key={f.label}>
+                      <div style={{fontSize:9, fontFamily:"monospace", letterSpacing:"0.3em", color:"rgba(255,255,255,0.4)", marginBottom:4}}>{f.label}</div>
+                      <input value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.ph}
+                        style={{width:"100%", background:"rgba(255,255,255,0.09)", border:"1px solid rgba(255,255,255,0.2)", color:"white", padding:"7px 10px", fontSize:13, borderRadius:2, outline:"none", fontFamily:"inherit", boxSizing:"border-box"}} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:9, fontFamily:"monospace", letterSpacing:"0.3em", color:"rgba(255,255,255,0.4)", marginBottom:4}}>背景・現状の概要</div>
+                <textarea value={bg} onChange={e=>setBg(e.target.value)} rows={2}
+                  style={{width:"100%", background:"rgba(255,255,255,0.09)", border:"1px solid rgba(255,255,255,0.2)", color:"white", padding:"7px 10px", fontSize:13, borderRadius:2, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box"}} />
+                <div style={{fontSize:9, fontFamily:"monospace", letterSpacing:"0.3em", color:"rgba(255,255,255,0.4)", marginTop:16, marginBottom:8}}>現状のプロセス</div>
+                <FlowEditor nodes={flowNodes} edges={flowEdges} onNodesChange={setFlowNodes} onEdgesChange={setFlowEdges} />
+              </div>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14}}>
+                <div style={{fontSize:16, fontWeight:900}}>メンバーの視点</div>
+                <span style={{fontFamily:"monospace", fontSize:11, color:"#888", background:"rgba(0,0,0,0.06)", padding:"3px 12px", borderRadius:20}}>{members.length} 名</span>
+              </div>
+              <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:14, marginBottom:14}}>
+                {members.map((m, idx) => (
+                  <MemberCard key={m.id} m={m} idx={idx} allImages={allImages}
+                    onUpdate={(f,v) => updateMember(m.id,f,v)}
+                    onRemove={() => setMembers(ms => ms.filter(x => x.id !== m.id))} />
+                ))}
+              </div>
+              <button onClick={() => { const id=seq.current++; setMembers(ms=>[...ms,{id,name:"",role:"",problem:"",ideal:"",measure:""}]); }}
+                style={{width:"100%", border:"2px dashed #ccc", background:"transparent", color:"#aaa", padding:12, fontFamily:"monospace", fontSize:12, cursor:"pointer", borderRadius:2, marginBottom:24}}>
+                ＋ メンバーを追加
+              </button>
+              <div style={{textAlign:"center"}}>
+                <button onClick={run}
+                  style={{background:"#c0392b", color:"white", border:"none", padding:"14px 48px", cursor:"pointer", fontFamily:"monospace", fontSize:13, letterSpacing:"0.2em", borderRadius:2}}>
+                  AIエージェント再起動 → 提案を再生成
+                </button>
+                <div style={{marginTop:8, fontSize:10, color:"#aaa", fontFamily:"monospace"}}>内容を変更して再生成できます</div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "proposal" && (
+            <div style={{background:"white", border:"2px solid #0d0d14", borderTop:"none", padding:"28px 36px"}}>
+              {[
+                {label:"◉ 統合戦略（Agent 3）",              color:"#c0392b", text:result.strategy},
+                {label:"◉ 本質的な問題意識の抽出（Agent 1）", color:"#1a2f5a", text:result.insights},
+                {label:"◉ 視点の止揚分析（Agent 2）",         color:"#2d5a27", text:result.tensions},
+                {label:"◉ 役員視点レビュー（Agent 5）",        color:"#1a5c3a", text:result.review},
+              ].map(s => (
+                <div key={s.label} style={{marginTop:24}}>
+                  <div style={{fontFamily:"monospace", fontSize:9, letterSpacing:"0.4em", textTransform:"uppercase", color:s.color, marginBottom:7}}>{s.label}</div>
+                  <div style={{fontSize:14, lineHeight:1.9, whiteSpace:"pre-wrap", color:"#1f2937"}}>{s.text}</div>
+                </div>
+              ))}
+              {/* プロセス改革図 */}
+              <div style={{marginTop:32}}>
+                <div style={{fontSize:16, fontWeight:900, marginBottom:4}}>プロセス改革図</div>
+                <div style={{fontSize:11, color:"#888", marginBottom:16}}>現状のプロセスと、提案に基づく目指すプロセスを対比します</div>
+                {/* AS-IS */}
+                <div style={{marginBottom:20}}>
+                  <div style={{fontFamily:"monospace", fontSize:9, letterSpacing:"0.35em", color:"#1a2f5a", marginBottom:6}}>AS-IS — 現状のプロセス</div>
+                  <div id="pdf-asis"><ProcessFlowSVG nodes={flowNodes.map(n=>({...n,status:"unchanged"}))} edges={flowEdges} mode="asis"/></div>
+                </div>
+                {/* 矢印 */}
+                <div style={{textAlign:"center", margin:"4px 0 12px", color:"#ccc", fontSize:20, lineHeight:1}}>↓</div>
+                {/* TO-BE */}
+                <div>
+                  <div style={{fontFamily:"monospace", fontSize:9, letterSpacing:"0.35em", color:"#1a5c3a", marginBottom:6}}>TO-BE — 目指すプロセス</div>
+                  {toBeData ? (
+                    <div>
+                      {toBeData.summary && <div style={{fontSize:11, color:"#1a5c3a", marginBottom:8, fontWeight:700}}>{toBeData.summary}</div>}
+                      <div id="pdf-tobe"><ProcessFlowSVG nodes={toBeData.nodes||[]} edges={toBeData.edges||[]} mode="tobe"/></div>
+                      <div style={{display:"flex", gap:12, marginTop:6, flexWrap:"wrap"}}>
+                        {[{c:"#3a5a8a",l:"変更なし"},{c:"#c9920a",l:"変更あり（改）"},{c:"#1a5c3a",l:"新規追加（NEW）"}].map(item=>(
+                          <div key={item.l} style={{display:"flex",alignItems:"center",gap:4}}>
+                            <div style={{width:10,height:10,borderRadius:2,background:item.c,opacity:0.6}}/>
+                            <span style={{fontSize:10,color:"#666"}}>{item.l}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{padding:"20px",textAlign:"center",border:"1px dashed #ddd",borderRadius:4}}>
+                      {svgLoading ? (
+                        <div style={{color:"#c9920a",fontFamily:"monospace",fontSize:11}}>⏳ To-Beプロセスを生成中...</div>
+                      ) : (
+                        <div>
+                          <div style={{color:"#bbb",fontSize:11,marginBottom:10}}>まだ生成されていません</div>
+                          <button onClick={generateSVG}
+                            style={{padding:"6px 18px",background:"#1a5c3a",border:"none",color:"white",fontFamily:"monospace",fontSize:10,cursor:"pointer",borderRadius:2}}>
+                            ↺ To-Beプロセスを生成する
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{marginTop:28}}>
+                <div style={{fontSize:16, fontWeight:900, marginBottom:12}}>スライド構成プレビュー</div>
+                <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:10}}>
+                  {slideList.map((sl,i) => (
+                    <div key={i} style={{background:"#faf8f4", border:"1px solid #e5e0d8", borderRadius:4, overflow:"hidden"}}>
+                      <div style={{height:5, background:COLORS[i%COLORS.length]}} />
+                      <div style={{padding:"11px 13px"}}>
+                        <div style={{fontFamily:"monospace", fontSize:8, color:"#bbb", marginBottom:3}}>SLIDE {sl.num}</div>
+                        <div style={{fontSize:13, fontWeight:700, lineHeight:1.3}}>{sl.title}</div>
+                        {sl.sub && <div style={{fontSize:11, color:"#888", marginTop:3}}>{sl.sub}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {imgs.length > 0 && (
+                <div style={{marginTop:24}}>
+                  <div style={{fontSize:14, fontWeight:900, marginBottom:10}}>資料から抽出した画像 ({imgs.length}枚)</div>
+                  <div style={{display:"flex", flexWrap:"wrap", gap:8}}>
+                    {imgs.map((img,i) => (
+                      <div key={i} style={{position:"relative"}}>
+                        <img src={img.url} alt={img.name} style={{width:120, height:80, objectFit:"cover", borderRadius:4, border:"1px solid #e5e0d8"}} />
+                        <div style={{position:"absolute", bottom:2, left:2, right:2, background:"rgba(0,0,0,0.5)", color:"white", fontSize:8, padding:"1px 4px", borderRadius:2, textOverflow:"ellipsis", overflow:"hidden", whiteSpace:"nowrap"}}>{img.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "diagram" && (
+            <div style={{background:"white", border:"2px solid #0d0d14", borderTop:"none", padding:"28px 36px"}}>
+              {/* シーケンシャル進捗バー */}
+              {svgLoading && (
+                <div style={{marginBottom:28}}>
+                  <div style={{fontFamily:"monospace", fontSize:11, color:"#888", marginBottom:10}}>図解を自動生成中...</div>
+                  <div style={{display:"flex", gap:6}}>
+                    {[
+                      {step:1,label:"戦略マップ"},
+                      {step:2,label:"問題ツリー"},
+                      {step:3,label:"因果連鎖"},
+                      {step:4,label:"To-Beプロセス"},
+                    ].map(s=>(
+                      <div key={s.step} style={{flex:1, textAlign:"center"}}>
+                        <div style={{height:4, borderRadius:2, marginBottom:4,
+                          background: svgGenStep>=s.step ? "#1a2f5a" : svgGenStep===s.step-1 ? "#c9920a" : "#e5e0d8",
+                          transition:"background 0.3s"}}/>
+                        <div style={{fontSize:9, fontFamily:"monospace",
+                          color: svgGenStep>=s.step ? "#1a2f5a" : svgGenStep===s.step-1 ? "#c9920a" : "#bbb"}}>
+                          {svgGenStep>=s.step?"✓ ":svgGenStep===s.step-1?"⏳ ":""}{s.label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* 生成済み図解 */}
+              {(svgData || causalData || toBeData) && (
+                <div>
+                  {[
+                    {id:"svg-problem-tree", show:!!svgData, title:"① 問題・課題ツリー図", subtitle:"根本問題→原因→本質的課題の階層構造", comp:svgData?<ProblemTreeSVG data={svgData.problemTree}/>:null, file:"problem-tree.svg"},
+                    {id:"svg-strategy",     show:!!svgData, title:"② 戦略マップ",        subtitle:"提案の核心と3本柱の構造",        comp:svgData?<StrategyMapSVG data={svgData.strategyMap}/>:null, file:"strategy-map.svg"},
+                    {id:"svg-roadmap",      show:!!svgData, title:"③ ロードマップ",      subtitle:"3フェーズの実行計画タイムライン", comp:svgData?<RoadmapSVG data={svgData.roadmap}/>:null, file:"roadmap.svg"},
+                    {id:"svg-stakeholder",  show:!!svgData, title:"④ ステークホルダーマップ", subtitle:"参加者の問題意識グルーピング", comp:svgData?<StakeholderSVG data={svgData.stakeholderMap} members={result.valid}/>:null, file:"stakeholder-map.svg"},
+                    {id:"svg-causal",       show:!!causalData, title:"⑤ 因果連鎖グラフ", subtitle:"施策→効果→課題解決の波及構造（DAG）", comp:causalData?<CausalChainSVG data={causalData}/>:null, file:"causal-dag.svg"},
+                  ].filter(d=>d.show).map(d=>(
+                    <div key={d.id} style={{marginBottom:36}}>
+                      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+                        <div>
+                          <div style={{fontSize:15, fontWeight:900}}>{d.title}</div>
+                          <div style={{fontSize:11, color:"#888"}}>{d.subtitle}</div>
+                        </div>
+                        <button onClick={()=>downloadSVG(d.id,d.file)}
+                          style={{padding:"7px 16px", fontFamily:"monospace", fontSize:10, cursor:"pointer", borderRadius:2, background:"#1a2f5a", border:"none", color:"white", letterSpacing:"0.1em"}}>
+                          ⬇ SVGをDL
+                        </button>
+                      </div>
+                      <div id={d.id} style={{border:"1px solid #e5e0d8", borderRadius:4, overflow:"hidden"}}>{d.comp}</div>
+                    </div>
+                  ))}
+                  {!svgLoading && (
+                    <button onClick={generateSVG}
+                      style={{padding:"8px 18px", fontFamily:"monospace", fontSize:10, cursor:"pointer", borderRadius:2, background:"transparent", border:"1px solid #ccc", color:"#888"}}>
+                      ↺ 再生成
+                    </button>
+                  )}
+                </div>
+              )}
+              {!svgData && !causalData && !svgLoading && (
+                <div style={{textAlign:"center", padding:"40px 0"}}>
+                  <div style={{fontSize:40, marginBottom:12}}>🗺</div>
+                  <div style={{fontSize:16, fontWeight:900, marginBottom:8}}>図解データを生成中です</div>
+                  <div style={{fontSize:13, color:"#888"}}>提案生成後に自動で図解されます。完了までしばらくお待ちください。</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{display:"flex", gap:12, marginTop:20, flexWrap:"wrap"}}>
+            <button onClick={() => copyText(fullText)}
+              style={{padding:"12px 28px", fontFamily:"monospace", fontSize:11, letterSpacing:"0.15em", cursor:"pointer", borderRadius:2, background:copied?"#1a5c3a":"#c9920a", border:"none", color:"white", fontWeight:700}}>
+              {copied ? "✓ コピーしました" : "📋 全文をコピー"}
+            </button>
+            <button onClick={exportPDF}
+              style={{padding:"12px 28px", fontFamily:"monospace", fontSize:11, letterSpacing:"0.15em", cursor:"pointer", borderRadius:2, background:"#1a2f5a", border:"none", color:"white", fontWeight:700}}>
+              📄 HTMLで出力（印刷→PDF）
+            </button>
+            <button onClick={reset}
+              style={{padding:"12px 28px", fontFamily:"monospace", fontSize:11, letterSpacing:"0.15em", cursor:"pointer", borderRadius:2, background:"transparent", border:"2px solid #0d0d14", color:"#0d0d14"}}>
+              ← やり直す
+            </button>
+          </div>
+          {err && <div style={{background:"#fff0ee", border:"1px solid #c0392b", color:"#c0392b", padding:"9px 16px", fontFamily:"monospace", fontSize:11, borderRadius:2, marginTop:10}}>{err}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+
+
+function ApiKeyScreen({ onStart }) {
+  const [key, setKey] = React.useState("");
+  const [err, setErr] = React.useState("");
+  const [testing, setTesting] = React.useState(false);
+
+  const stored = sessionStorage.getItem("synthesis_api_key");
+  React.useEffect(() => {
+    if (stored) { window.__SYNTHESIS_KEY__ = stored; onStart(); }
+  }, []);
+
+  const handleStart = async () => {
+    const k = key.trim();
+    if (!k.startsWith("sk-ant-")) { setErr("APIキーは sk-ant- で始まる形式です"); return; }
+    setTesting(true); setErr("");
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:10,messages:[{role:"user",content:"hi"}]})
+      });
+      if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.error?.message||"認証失敗"); }
+      window.__SYNTHESIS_KEY__ = k;
+      sessionStorage.setItem("synthesis_api_key", k);
+      onStart();
+    } catch(e) { setErr("エラー: " + e.message); }
+    setTesting(false);
+  };
+
+  if (stored) return null;
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0d0d14",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"monospace"}}>
+      <div style={{width:480,padding:"48px 40px",background:"#13131f",border:"1px solid #2a2a3a",borderRadius:8}}>
+        <div style={{color:"#c9920a",fontSize:11,letterSpacing:"0.5em",marginBottom:8}}>SYNTHESIS</div>
+        <div style={{color:"white",fontSize:22,fontWeight:900,marginBottom:6,lineHeight:1.2}}>AI統合提案エンジン</div>
+        <div style={{color:"#666",fontSize:11,marginBottom:32,lineHeight:1.6}}>
+          Anthropic APIキーを入力してください。<br/>
+          キーはこのブラウザセッション中のみ保持されます。
+        </div>
+        <div style={{marginBottom:16}}>
+          <div style={{color:"#888",fontSize:10,letterSpacing:"0.2em",marginBottom:6}}>API KEY</div>
+          <input
+            type="password"
+            value={key}
+            onChange={e=>setKey(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&handleStart()}
+            placeholder="sk-ant-api03-..."
+            style={{width:"100%",padding:"12px 14px",background:"#1a1a2a",border:"1px solid #333",borderRadius:4,color:"white",fontFamily:"monospace",fontSize:13,outline:"none"}}
+          />
+        </div>
+        {err && <div style={{color:"#c0392b",fontSize:11,marginBottom:12,padding:"8px 10px",background:"rgba(192,57,43,0.1)",borderRadius:3}}>{err}</div>}
+        <button onClick={handleStart} disabled={testing||!key.trim()}
+          style={{width:"100%",padding:"13px",background:testing?"#333":"#c9920a",border:"none",color:testing?"#888":"#0d0d14",fontFamily:"monospace",fontWeight:900,fontSize:12,letterSpacing:"0.3em",cursor:testing?"wait":"pointer",borderRadius:4,transition:"background 0.2s"}}>
+          {testing ? "⏳ 確認中..." : "START →"}
+        </button>
+        <div style={{marginTop:24,padding:"14px",background:"rgba(201,146,10,0.06)",border:"1px solid rgba(201,146,10,0.2)",borderRadius:4}}>
+          <div style={{color:"#c9920a",fontSize:9,letterSpacing:"0.2em",marginBottom:6}}>APIキーの取得方法</div>
+          <div style={{color:"#666",fontSize:10,lineHeight:1.7}}>
+            1. <a href="https://console.anthropic.com" target="_blank" style={{color:"#c9920a"}}>console.anthropic.com</a> にアクセス<br/>
+            2. 「API Keys」→「Create Key」<br/>
+            3. 生成されたキーをコピーして上に貼り付け
+          </div>
+        </div>
+        <div style={{marginTop:16,color:"#444",fontSize:9,textAlign:"center",lineHeight:1.6}}>
+          キーはサーバーに送信されません。ブラウザのsessionStorageのみに保存。<br/>
+          タブを閉じると自動削除されます。
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Root() {
+  const [started, setStarted] = React.useState(false);
+  return started ? React.createElement(App) : React.createElement(ApiKeyScreen, {onStart:()=>setStarted(true)});
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(Root));
+</script>
+</body>
+</html> 0; background: #f4f0e8; }
   input, button, textarea, select { font-family: inherit; }
 </style>
 </head>
